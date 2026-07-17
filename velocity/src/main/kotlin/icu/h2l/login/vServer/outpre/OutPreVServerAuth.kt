@@ -48,6 +48,7 @@ import icu.h2l.login.vServer.outpre.handler.OutPreAuthSessionHandler
 import io.netty.channel.Channel
 import net.kyori.adventure.text.Component
 import net.kyori.adventure.text.format.NamedTextColor
+import java.util.*
 import java.util.concurrent.ConcurrentHashMap
 import kotlin.jvm.optionals.getOrNull
 
@@ -77,8 +78,8 @@ class OutPreVServerAuth(
         private set
 
     fun init(plugin: Any) {
-        val authAddress = configuredAuthAddress()
-            ?: throw IllegalStateException("OutPre auth endpoint is not configured")
+        val authAddress =
+            configuredAuthAddress() ?: throw IllegalStateException("OutPre auth endpoint is not configured")
         val proxy = server as? com.velocitypowered.proxy.VelocityServer
             ?: throw IllegalStateException("OutPre requires VelocityServer runtime")
         val authTargetLabel = configuredAuthTargetLabel()
@@ -109,13 +110,12 @@ class OutPreVServerAuth(
     //    创建后端桥接
     fun createBridge(player: ConnectedPlayer): OutPreBackendBridge {
         initialBridges[player.getChannel()]?.let { return it }
-        val authAddress = configuredAuthAddress()
-            ?: throw IllegalStateException("OutPre auth endpoint is not configured")
+        val authAddress =
+            configuredAuthAddress() ?: throw IllegalStateException("OutPre auth endpoint is not configured")
         val proxy = server as? com.velocitypowered.proxy.VelocityServer
             ?: throw IllegalStateException("OutPre requires VelocityServer runtime")
         return OutPreBackendBridge(
-            proxy, authAddress, player, this,
-            registeredServer as VelocityRegisteredServer
+            proxy, authAddress, player, this, registeredServer as VelocityRegisteredServer
         ).also {
             initialBridges[player.getChannel()] = it
         }
@@ -213,10 +213,7 @@ class OutPreVServerAuth(
 
     fun resolveReleaseTarget(player: ConnectedPlayer, preferredTargetServerName: String?): RegisteredServer? {
         val authTargetLabel = states[player.getChannel()]?.authTargetLabel ?: configuredAuthTargetLabel()
-        val resolvedTargetName = preferredTargetServerName
-            ?.takeUnless { it.isBlank() || it.equals(authTargetLabel, ignoreCase = true) }
-            ?.takeIf { server.getServer(it).isPresent }
-            ?: resolveFallbackTargetServerName(authTargetLabel)
+        val resolvedTargetName = resolvePostAuthTarget(player, authTargetLabel, preferredTargetServerName)
         return resolvedTargetName?.let { server.getServer(it).orElse(null) }
     }
 
@@ -240,11 +237,7 @@ class OutPreVServerAuth(
 
     override fun isPlayerInWaitingArea(player: Player): Boolean {
         val state = states[player.getChannel()]
-        return state != null && (
-                state.inAuthHold ||
-                        !state.hasConnectedToAuthServerOnce ||
-                        state.initialFlowPending
-                )
+        return state != null && (state.inAuthHold || !state.hasConnectedToAuthServerOnce || state.initialFlowPending)
     }
 
     override fun supportsProxyFallbackCommands(): Boolean {
@@ -510,9 +503,7 @@ class OutPreVServerAuth(
         failureReasonKey: String,
     ): Boolean {
         val messages = HyperZoneLoginMain.getInstance().messageService
-        val resolvedTarget = targetServerName
-            ?.takeUnless { it.isBlank() || it.equals(authServerName, ignoreCase = true) }
-            ?: resolveFallbackTargetServerName(authServerName)
+        val resolvedTarget = resolvePostAuthTarget(player, authServerName, targetServerName)
         val hyperPlayer = getHyperPlayer(player)
 
         if (resolvedTarget == null) {
@@ -587,16 +578,34 @@ class OutPreVServerAuth(
         return HyperZoneLoginMain.getCoreConfig().vServer.rememberRequestedServerDuringAuth
     }
 
-    private fun resolveFallbackTargetServerName(authServerName: String): String? {
-        val directConfiguredTarget = HyperZoneLoginMain.getCoreConfig().vServer.postAuthDefaultServer
-            .trim()
-            .takeUnless { it.isBlank() || it.equals(authServerName, ignoreCase = true) }
-            ?.takeIf { server.getServer(it).isPresent }
-        if (directConfiguredTarget != null) {
-            return directConfiguredTarget
+    /**
+     * 根据 Velocity 的 Forced Host / 连接顺序动态解析认证后的目标服务器。
+     * 优先级：Forced Host > 记忆目标 (preferredTarget) > 任意非认证服。
+     */
+    private fun resolvePostAuthTarget(
+        player: Player, authServerName: String, preferredTarget: String?
+    ): String? {
+        val config = server.configuration
+
+        val hostKey = player.virtualHost.map { it.hostString.lowercase(Locale.ROOT) }.orElse("")
+        val forcedOrder = config.forcedHosts[hostKey].orEmpty()
+        val connectionOrder = if (forcedOrder.isNotEmpty()) {
+            forcedOrder
+        } else {
+            config.attemptConnectionOrder
         }
 
-        return null
-    }
+        connectionOrder.firstOrNull { candidate ->
+            !candidate.equals(authServerName, ignoreCase = true) && server.getServer(candidate).isPresent
+        }?.let { return it }
 
+        preferredTarget?.takeUnless { it.isBlank() || it.equals(authServerName, ignoreCase = true) }
+            ?.takeIf { server.getServer(it).isPresent }?.let { return it }
+
+        return server.allServers.firstOrNull { candidate ->
+            !candidate.serverInfo.name.equals(
+                authServerName, ignoreCase = true
+            )
+        }?.serverInfo?.name
+    }
 }
