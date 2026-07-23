@@ -51,7 +51,7 @@ object EmbeddedModuleRegistry {
         configKey = "authYggd",
         displayName = "Auth Yggdrasil",
         externalPluginId = "hzl-auth-yggd",
-        implementationClassName = "icu.h2l.login.auth.online.YggdrasilSubModule",
+        implementationClassName = "icu.h2l.login.auth.online.main.YggdrasilSubModule",
     )
 
     val safe = EmbeddedModuleSpec(

@@ -46,7 +46,7 @@ class EntryTableManager(
     @Suppress("DEPRECATION")
     private fun createEntryTable(entryTable: EntryTable) {
         databaseManager.executeTransaction {
-            SchemaUtils.createMissingTablesAndColumns(entryTable)
+            SchemaUtils.createMissingTablesAndColumns(entryTable, withLogs = false)
         }
     }
 

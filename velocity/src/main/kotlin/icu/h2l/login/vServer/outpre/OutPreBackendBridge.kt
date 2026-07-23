@@ -36,7 +36,7 @@ import com.velocitypowered.proxy.protocol.packet.config.FinishedUpdatePacket
 import com.velocitypowered.proxy.server.VelocityRegisteredServer
 import icu.h2l.login.HyperZoneLoginMain
 import icu.h2l.login.reflect.VelocityInternalAccess
-import icu.h2l.login.vServer.outpre.handler.OutPreBackendBridgeSessionHandler
+import icu.h2l.login.vServer.outpre.handler.bridge.OutPreBackendBridgeSessionHandler
 import io.netty.channel.ChannelFutureListener
 import java.net.InetSocketAddress
 import java.util.concurrent.CompletableFuture
@@ -47,9 +47,19 @@ class OutPreBackendBridge(
     val proxyServer: VelocityServer,
     private val authTargetAddress: InetSocketAddress,
     val player: ConnectedPlayer,
-    private val owner: OutPreVServerAuth,
     private val registeredServer: VelocityRegisteredServer,
 ) {
+    internal interface Callback {
+        fun onJoined()
+        fun onDisconnected(reason: String?)
+    }
+
+    @Volatile
+    private var sessionCallback: Callback? = null
+
+    internal fun bindSession(callback: Callback) {
+        sessionCallback = callback
+    }
     enum class Phase {
         IDLE,
         CONNECTING,
@@ -211,13 +221,12 @@ class OutPreBackendBridge(
     fun onBackendJoined() {
         updatePhase(Phase.PLAY_READY)
         playReadyFuture.complete(null)
-        owner.onInitialBridgeJoined(this, player)
+        sessionCallback?.onJoined()
     }
 
     fun onBackendDisconnected(reason: String? = null) {
-        val failure = IllegalStateException(reason ?: "OutPre backend bridge disconnected")
-        fail(failure, notifyOwner = false)
-        owner.onInitialBridgeDisconnected(this, player, reason)
+        fail(IllegalStateException(reason ?: "OutPre backend bridge disconnected"))
+        sessionCallback?.onDisconnected(reason)
     }
 
     var disconnected: Boolean = false
@@ -237,7 +246,7 @@ class OutPreBackendBridge(
         updatePhase(Phase.CLOSED)
     }
 
-    private fun fail(throwable: Throwable, notifyOwner: Boolean = false) {
+    private fun fail(throwable: Throwable) {
         updatePhase(Phase.CLOSING)
         awaitingClientConfigurationAck = false
         connectFuture.completeExceptionally(throwable)
@@ -245,9 +254,6 @@ class OutPreBackendBridge(
         serverConnection.disconnect()
         backendConnection = null
         updatePhase(Phase.CLOSED)
-        if (notifyOwner) {
-            owner.onInitialBridgeDisconnected(this, player, throwable.message)
-        }
     }
 
     private fun updatePhase(newPhase: Phase) {

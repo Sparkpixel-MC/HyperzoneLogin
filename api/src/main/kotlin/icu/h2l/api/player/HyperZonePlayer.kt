@@ -53,8 +53,10 @@ interface HyperZonePlayer {
      * 该值明确为“不可信身份”，不会因为后续 attach Profile 而被改写。
      * 它只允许用于调试、客户端回放或极弱的候选发现流程；
      * 严禁把它作为可信认证结果或正式游戏 UUID 使用。
+     * 
+     * 如果客户端未上报 UUID（null），核心层会自动生成一个 UUID。
      */
-    val clientOriginalUUID: UUID
+    val clientOriginalUUID: UUID?
 
     /**
      * 当前会话完成认证的渠道 ID。
@@ -110,24 +112,6 @@ interface HyperZonePlayer {
      * 获取当前会话已提交的全部凭证快照。
      */
     fun getSubmittedCredentials(): List<HyperZoneCredential>
-
-    /**
-     * 当前玩家是否仍处于等待区。
-     *
-     * 等待区判定同时取决于两条链路：
-     * 1. 认证链路：必须完成验证；
-     * 2. Profile 链路：必须已经 attach 游戏档案。
-     *
-     * 任一条件不满足，都必须继续停留在等待区。
-     */
-    fun isInWaitingArea(): Boolean {
-        return !isVerified() || !hasAttachedProfile()
-    }
-
-    /**
-     * 当前玩家是否已完成验证。
-     */
-    fun isVerified(): Boolean
 
     /**
      * 判断是否允许进行绑定流程。

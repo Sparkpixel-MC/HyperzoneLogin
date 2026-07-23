@@ -19,7 +19,7 @@
  *
  */
 
-package icu.h2l.login.auth.online
+package icu.h2l.login.auth.online.listener
 
 import com.velocitypowered.api.util.GameProfile
 import icu.h2l.api.db.HyperZoneDatabaseManager
@@ -27,6 +27,7 @@ import icu.h2l.api.db.table.ProfileTable
 import icu.h2l.api.event.auth.LoginReUuidEvent
 import icu.h2l.api.player.HyperZonePlayer
 import icu.h2l.api.profile.HyperZoneCredential
+import icu.h2l.login.auth.online.credential.YggdrasilHyperZoneCredential
 import icu.h2l.login.auth.online.db.EntryDatabaseHelper
 import icu.h2l.login.auth.online.db.EntryTableManager
 import net.kyori.adventure.text.Component
@@ -36,12 +37,12 @@ import org.junit.jupiter.api.Test
 import java.util.*
 
 /**
- * 测试 [YggdrasilReUuidListener]：reuuid 场景及混合冲突场景（UUID 冲突通过 reuuid 解决后，
+ * 测试 [ReUuidListener]：reuuid 场景及混合冲突场景（UUID 冲突通过 reuuid 解决后，
  * 凭证应清除 suggestedProfileCreateUuid，交由核心 ReUuid 逻辑选取新 UUID）。
  */
-class YggdrasilReUuidListenerTest {
+class ReUuidListenerTest {
 
-    private val listener = YggdrasilReUuidListener()
+    private val listener = ReUuidListener()
     private val authenticatedUuid: UUID = UUID.fromString("cccccccc-cccc-cccc-cccc-cccccccccccc")
     private val suggestedUuid: UUID = UUID.fromString("dddddddd-dddd-dddd-dddd-dddddddddddd")
 
@@ -149,7 +150,6 @@ class YggdrasilReUuidListenerTest {
         private val credentials = mutableListOf<HyperZoneCredential>()
 
         override fun hasAttachedProfile(): Boolean = false
-        override fun isVerified(): Boolean = false
         override fun canBind(): Boolean = false
         override fun overVerify() {}
         override fun resetVerify() { credentials.clear() }

@@ -19,7 +19,7 @@
  *
  */
 
-package icu.h2l.login.auth.online.gson
+package icu.h2l.login.auth.online.util
 
 import com.google.gson.Gson
 import com.google.gson.GsonBuilder

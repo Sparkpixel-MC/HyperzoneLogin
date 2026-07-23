@@ -25,6 +25,7 @@ import com.google.inject.Inject;
 import com.velocitypowered.api.event.Subscribe;
 import com.velocitypowered.api.event.proxy.ProxyInitializeEvent;
 import com.velocitypowered.api.proxy.ProxyServer;
+import icu.h2l.login.auth.online.main.AuthYggdPlugin;
 
 public final class AuthYggdBootstrap {
     private final AuthYggdPlugin delegate;

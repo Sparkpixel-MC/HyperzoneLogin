@@ -41,6 +41,7 @@ import icu.h2l.api.event.connection.OpenPreLoginEvent
 import icu.h2l.api.event.connection.OpenStartAuthEvent
 import icu.h2l.api.log.HyperZoneDebugType
 import icu.h2l.api.log.debug
+import icu.h2l.api.util.RemapUtils
 import icu.h2l.login.HyperZoneLoginMain
 import icu.h2l.login.inject.network.NettyReflectionHelper
 import icu.h2l.login.inject.network.NettyReflectionHelper.fireLogin
@@ -200,11 +201,10 @@ class NettyLoginSessionHandler(
                     val playerIp = remoteAddress.hostString
 
                     val openPreLoginEvent =
-                        OpenPreLoginEvent(holderUuid!!, userName, host, playerIp, mcConnection.channel)
+                        OpenPreLoginEvent(holderUuid, userName, host, playerIp, mcConnection.channel)
                     injector.proxy.eventManager.fire(openPreLoginEvent).thenRun {
                         val resolvedOnlineMode = openPreLoginEvent.isOnline
                             && !result.isForceOfflineMode
-                            && (injector.proxy.configuration.isOnlineMode || result.isOnlineModeAllowed)
                         debug(HyperZoneDebugType.OUTPRE_TRACE) {
                             "netty.handleServerLogin after-OpenPreLogin channel=${mcConnection.channel} username=$userName allow=${openPreLoginEvent.allow} requestedOnline=${openPreLoginEvent.isOnline} resolvedOnline=$resolvedOnlineMode forceOffline=${result.isForceOfflineMode} onlineAllowed=${result.isOnlineModeAllowed} host=$host playerIp=$playerIp"
                         }
@@ -248,18 +248,23 @@ class NettyLoginSessionHandler(
 
     private fun doLogin(encrypt: Boolean, serverId: String?, decryptedSharedSecret: ByteArray?) {
 
-
         val remoteAddress = mcConnection.remoteAddress as InetSocketAddress
         val playerIp = remoteAddress.hostString
+        
+        val actualUuid = login.holderUuid ?: run {
+            val prefix = HyperZoneLoginMain.getCoreConfig().remap.prefix
+            RemapUtils.genUUID(login.getUsername(), prefix)
+        }
+        
         val openStartAuthEvent = OpenStartAuthEvent(
             login.getUsername(),
-            login.holderUuid!!,
+            actualUuid,
             serverId!!,
             playerIp,
             mcConnection.channel,
             onlineMode
         )
-        val preProfile = GameProfile(login.holderUuid, login.username, Collections.emptyList())
+        val preProfile = GameProfile(actualUuid, login.username, Collections.emptyList())
 
         openStartAuthEvent.gameProfile = preProfile
 

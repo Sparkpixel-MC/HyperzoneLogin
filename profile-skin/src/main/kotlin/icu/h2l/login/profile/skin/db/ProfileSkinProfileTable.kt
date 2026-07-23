@@ -29,7 +29,7 @@ class ProfileSkinProfileTable(
     profileTable: ProfileTable,
     cacheTable: ProfileSkinCacheTable
 ) : Table("${prefix}skin_profile") {
-    val profileId = uuid("profile_id").references(profileTable.id).uniqueIndex()
+    val profileId = uuid("profile_id").references(profileTable.id)
     val skinId = uuid("skin_id").references(cacheTable.id)
     val updatedAt = long("updated_at")
 
@@ -39,4 +39,3 @@ class ProfileSkinProfileTable(
 
     override val primaryKey = PrimaryKey(profileId)
 }
-

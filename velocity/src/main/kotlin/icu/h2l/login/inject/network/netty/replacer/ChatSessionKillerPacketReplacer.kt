@@ -48,6 +48,7 @@ class ChatSessionKillerPacketReplacer(
 ) : ChannelOutboundHandlerAdapter() {
     private lateinit var player: ConnectedPlayer
     private var shouldKill = true
+    private var chatSessionPacketId: Int? = 0
 
     override fun write(ctx: ChannelHandlerContext, msg: Any?, promise: ChannelPromise?) {
         try {
@@ -68,7 +69,7 @@ class ChatSessionKillerPacketReplacer(
             }
 
             val packetId = readPacketId(msg)
-            if (packetId != null && ChatSessionUpdatePacketIdResolver.isChatSessionUpdate(player.protocolVersion, packetId)) {
+            if (packetId != null && chatSessionPacketId == packetId) {
                 retire()
                 ReferenceCountUtil.safeRelease(msg)
                 promise?.setSuccess()
@@ -114,9 +115,10 @@ class ChatSessionKillerPacketReplacer(
 
         player = resolvedPlayer
         val hyperPlayer = HyperZonePlayerManager.getByPlayerOrNull(player)
+        chatSessionPacketId = ChatSessionUpdatePacketIdResolver.resolve(player.protocolVersion)
         shouldKill = HyperZoneLoginMain.getCoreConfig().misc.killChatSession
-            && hyperPlayer?.isOnlinePlayer == true
-            && ChatSessionUpdatePacketIdResolver.resolve(player.protocolVersion) != null
+                && hyperPlayer?.isOnlinePlayer == true
+                && chatSessionPacketId != null
         return Unit
     }
 }

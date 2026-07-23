@@ -29,7 +29,7 @@ import net.kyori.adventure.text.Component
 import java.util.*
 
 /**
- * 在开始执行在线认证或类似外部鉴权前触发。
+ * 在开始执行在线认证或类似外部鉴权前触发。先于OpenStartAuthEvent。
  *
  * Velocity typically fires this event asynchronously and does not wait for a response. However,
  * it will wait for all [DisconnectEvent]s for every player on the proxy to fire

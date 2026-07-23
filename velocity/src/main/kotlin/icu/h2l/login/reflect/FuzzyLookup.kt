@@ -51,7 +51,7 @@ object FuzzyLookup {
         var cur: Class<*>? = clazz
         while (cur != null) {
             for (name in names) {
-                runCatching { cur!!.getDeclaredField(name) }
+                runCatching { cur.getDeclaredField(name) }
                     .getOrNull()
                     ?.also { it.isAccessible = true; return it }
             }
@@ -98,7 +98,7 @@ object FuzzyLookup {
         var cur: Class<*>? = clazz
         while (cur != null) {
             for (name in names) {
-                runCatching { cur!!.getDeclaredMethod(name, *paramTypes) }
+                runCatching { cur.getDeclaredMethod(name, *paramTypes) }
                     .getOrNull()
                     ?.also { it.isAccessible = true; return it }
             }

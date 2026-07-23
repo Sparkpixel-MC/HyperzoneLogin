@@ -28,6 +28,7 @@ import icu.h2l.api.event.connection.OpenPreLoginEvent
 import icu.h2l.api.player.HyperZonePlayer
 import icu.h2l.api.player.HyperZonePlayerAccessor
 import icu.h2l.api.player.getChannel
+import icu.h2l.api.util.RemapUtils
 import icu.h2l.login.HyperZoneLoginMain
 import icu.h2l.login.listener.PlayerAreaLifecycleListener
 import icu.h2l.login.player.VelocityHyperZonePlayer
@@ -36,7 +37,7 @@ import java.util.*
 import java.util.concurrent.ConcurrentHashMap
 
 object HyperZonePlayerManager : HyperZonePlayerAccessor {
-    private val playersByPlayer = ConcurrentHashMap<Channel, VelocityHyperZonePlayer>()
+    private val playersByChannel = ConcurrentHashMap<Channel, VelocityHyperZonePlayer>()
 
     @Subscribe(priority = Short.MIN_VALUE)
     fun onPreLoginChannelInit(event: OpenPreLoginEvent) {
@@ -44,9 +45,13 @@ object HyperZonePlayerManager : HyperZonePlayerAccessor {
         create(event.channel, event.userName, event.uuid, event.isOnline)
     }
 
-    override fun create(channel: Channel, userName: String, uuid: UUID, isOnline: Boolean): HyperZonePlayer {
-        val createdPlayer = VelocityHyperZonePlayer(userName, uuid, isOnline)
-        val existing = playersByPlayer.putIfAbsent(channel, createdPlayer)
+    override fun create(channel: Channel, userName: String, uuid: UUID?, isOnline: Boolean): HyperZonePlayer {
+        val finalUuid = uuid ?: run {
+            val prefix = HyperZoneLoginMain.getCoreConfig().remap.prefix
+            RemapUtils.genUUID(userName, prefix)
+        }
+        val createdPlayer = VelocityHyperZonePlayer(userName, finalUuid, isOnline)
+        val existing = playersByChannel.putIfAbsent(channel, createdPlayer)
         if (existing != null) {
             throw IllegalStateException("重复创建 HyperZonePlayer：channel=$channel clientOriginal=$userName")
         }
@@ -62,16 +67,16 @@ object HyperZonePlayerManager : HyperZonePlayerAccessor {
     }
 
     override fun getByChannel(channel: Channel): HyperZonePlayer {
-        return playersByPlayer[channel]
+        return playersByChannel[channel]
             ?: throw IllegalStateException("未找到对应的 HyperZonePlayer：channel=$channel")
     }
 
     fun getByChannelOrNull(channel: Channel): VelocityHyperZonePlayer? {
-        return playersByPlayer[channel]
+        return playersByChannel[channel]
     }
 
     fun remove(player: Player) {
-        playersByPlayer.remove(player.getChannel())?.let { removedPlayer ->
+        playersByChannel.remove(player.getChannel())?.let { removedPlayer ->
             runCatching {
                 HyperZoneLoginMain.getInstance().profileService.clear(removedPlayer)
             }

@@ -35,7 +35,7 @@ import java.util.*
  * successfully before the proxy shuts down. This event is the sole exception to the
  * [AwaitingEvent] contract.
  *
- * @property uuid 客户端上报的初始 UUID
+ * @property uuid 客户端上报的初始 UUID，可能为 null（此时应以在线模式处理）
  * @property userName 客户端上报的初始用户名
  * @property host 玩家连接时使用的目标主机名
  * @property playerIp 玩家 IP 字符串
@@ -43,7 +43,7 @@ import java.util.*
  */
 @AwaitingEvent
 class OpenPreLoginEvent(
-    val uuid: UUID,
+    val uuid: UUID?,
     val userName: String,
     val host: String,
     val playerIp: String,

@@ -55,7 +55,7 @@ class OverVServerCommand : HyperChatCommandExecutor {
             return
         }
 
-        if (!hyperZonePlayer.isInWaitingArea()) {
+        if (hyperZonePlayer.hasAttachedProfile()) {
             messages.send(source, MessageKeys.Over.NOT_IN_WAITING_AREA)
             return
         }
@@ -80,5 +80,4 @@ class OverVServerCommand : HyperChatCommandExecutor {
         return true
     }
 }
-
 

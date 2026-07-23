@@ -112,7 +112,7 @@ object PlayerAreaLifecycleListener {
         val player = event.player
         val hyperZonePlayer = HyperZonePlayerManager.getByPlayerOrNull(player) ?: return
         val adapterWaiting = HyperZoneLoginMain.getInstance().serverAdapter?.isPlayerInWaitingArea(player) == true
-        val logicalWaiting = hyperZonePlayer.isInWaitingArea() || adapterWaiting
+        val logicalWaiting = !hyperZonePlayer.hasAttachedProfile() || adapterWaiting
 
         if (logicalWaiting) {
             return
@@ -206,4 +206,3 @@ object PlayerAreaLifecycleListener {
         main.messageService.send(hyperZonePlayer, MessageKeys.Player.LEAVE_GAME_AREA)
     }
 }
-

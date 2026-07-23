@@ -27,7 +27,7 @@ import icu.h2l.api.log.debug
 import icu.h2l.api.log.error
 import icu.h2l.api.log.info
 import icu.h2l.api.util.ConfigLoader
-import icu.h2l.login.auth.online.config.entry.EntryConfig
+import icu.h2l.login.auth.online.config.EntryConfig
 import icu.h2l.login.auth.online.events.EntryRegisterEvent
 import java.nio.file.Files
 import java.nio.file.Path

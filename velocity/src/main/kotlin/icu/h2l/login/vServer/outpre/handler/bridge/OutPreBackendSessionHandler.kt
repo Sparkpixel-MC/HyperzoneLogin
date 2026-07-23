@@ -19,7 +19,7 @@
  *
  */
 
-package icu.h2l.login.vServer.outpre.handler
+package icu.h2l.login.vServer.outpre.handler.bridge
 
 import com.velocitypowered.api.event.player.CookieRequestEvent
 import com.velocitypowered.api.network.ProtocolVersion
@@ -31,6 +31,7 @@ import com.velocitypowered.proxy.protocol.netty.MinecraftEncoder
 import com.velocitypowered.proxy.protocol.packet.*
 import com.velocitypowered.proxy.protocol.packet.config.FinishedUpdatePacket
 import icu.h2l.api.log.HyperZoneDebugType
+import icu.h2l.api.log.debug
 import icu.h2l.login.manager.HyperChatCommandManagerImpl
 import icu.h2l.login.vServer.outpre.OutPreBackendBridge
 import io.netty.buffer.ByteBuf
@@ -38,6 +39,7 @@ import io.netty.buffer.Unpooled
 import io.netty.util.ReferenceCountUtil
 import net.kyori.adventure.text.Component
 import net.kyori.adventure.text.TextComponent
+import net.kyori.adventure.text.TranslatableComponent
 
 //为了保证兼容性，这里就当作普通的后端使用，不做queue等
 //未 override 的包默认走 handleGeneric 转发给玩家
@@ -74,7 +76,7 @@ class OutPreBackendBridgeSessionHandler(
 //            debug用
             if (reason.contains("Outdated client!")) {
                 //        Outdated client 版本不兼容，安装ViaBackwards
-                icu.h2l.api.log.debug(HyperZoneDebugType.OUTPRE_TRACE) {
+                debug(HyperZoneDebugType.OUTPRE_TRACE) {
                     "Outdated client clientProtocol:${bridge.player.protocolVersion} serverProtocol: reason:$reason"
                 }
             }
@@ -118,9 +120,18 @@ class OutPreBackendBridgeSessionHandler(
 
     override fun handle(packet: DisconnectPacket): Boolean {
 //        reson处理
-        val reason = runCatching { (packet.reason.component as TextComponent).content() }.getOrNull()
-        disconnect(reason)
+        disconnect(getReason(packet.reason.component))
         return true
+    }
+
+    fun getReason(component:Component): String?{
+//        如果component是Text
+        if (component is TextComponent){
+            return component.content()
+        }else if(component is TranslatableComponent){
+            return component.key()
+        }
+        return null
     }
 
     override fun handle(packet: SetCompressionPacket): Boolean {

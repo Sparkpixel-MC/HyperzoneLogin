@@ -31,12 +31,14 @@ dependencies {
     compileOnly(libs.velocityProxy)
     compileOnly(libs.nettyAll)
     compileOnly(libs.exposedCore)
+    compileOnly(libs.exposedJdbc)
     compileOnly(libs.configurateHocon)
     compileOnly(libs.configurateExtraKotlin)
     compileOnly(libs.gson)
 
     testImplementation(platform(libs.junitBom))
     testImplementation(libs.junitJupiter)
+    testImplementation(libs.exposedJdbc)
     testImplementation(libs.gson)
     testRuntimeOnly(libs.junitPlatformLauncher)
 }
@@ -44,4 +46,3 @@ dependencies {
 tasks.test {
     useJUnitPlatform()
 }
-

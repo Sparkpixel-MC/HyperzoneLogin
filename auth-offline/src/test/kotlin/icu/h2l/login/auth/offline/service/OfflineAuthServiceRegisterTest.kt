@@ -221,7 +221,7 @@ class OfflineAuthServiceRegisterTest {
     fun `join prompts no longer advertise direct register binding when creation is unavailable`() {
         insertProfile()
 
-        every { hyperZonePlayer.isInWaitingArea() } returns true
+        every { hyperZonePlayer.hasAttachedProfile() } returns false
         every { profileService.getAttachedProfile(hyperZonePlayer) } returns PROFILE
 
         val prompts = service.getJoinPrompts(player)
@@ -241,7 +241,7 @@ class OfflineAuthServiceRegisterTest {
             profileId = PROFILE.id
         )
 
-        every { hyperZonePlayer.isInWaitingArea() } returns true
+        every { hyperZonePlayer.hasAttachedProfile() } returns false
         every { hyperZonePlayer.clientOriginalName } returns OTHER_NAME
 
         val result = service.loginAs(player, USERNAME, VALID_PASSWORD)
@@ -260,7 +260,7 @@ class OfflineAuthServiceRegisterTest {
 
     @Test
     fun `login without explicit username gives a hint when current connection name is unregistered`() {
-        every { hyperZonePlayer.isInWaitingArea() } returns true
+        every { hyperZonePlayer.hasAttachedProfile() } returns false
         every { hyperZonePlayer.clientOriginalName } returns OTHER_NAME
         every { profileService.getAttachedProfile(hyperZonePlayer) } returns null
 
@@ -369,7 +369,7 @@ class OfflineAuthServiceRegisterTest {
         override fun create(
             channel: io.netty.channel.Channel,
             userName: String,
-            uuid: UUID,
+            uuid: UUID?,
             isOnline: Boolean
         ): HyperZonePlayer {
             return hyperZonePlayer
@@ -402,8 +402,6 @@ class OfflineAuthServiceRegisterTest {
         }
     }
 }
-
-
 
 
 

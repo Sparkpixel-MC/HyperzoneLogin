@@ -38,6 +38,7 @@ import icu.h2l.api.player.HyperZonePlayer
 import icu.h2l.api.player.HyperZonePlayerAccessor
 import icu.h2l.api.profile.HyperZoneProfileService
 import icu.h2l.api.profile.skin.ProfileSkinTextures
+import icu.h2l.api.util.RemapUtils
 import icu.h2l.login.profile.skin.config.ProfileSkinConfig
 import icu.h2l.login.profile.skin.db.ProfileSkinCacheRepository
 import icu.h2l.login.profile.skin.db.ProfileSkinProfileRepository
@@ -112,6 +113,10 @@ class ProfileSkinSelfReplayService(
 
     @Subscribe(priority = Short.MIN_VALUE)
     fun onProfileSkinPreprocessInitialSend(event: ProfileSkinPreprocessEvent) {
+        if (!event.hyperZonePlayer.hasAttachedProfile()) {
+            return
+        }
+
         val state = replayStates[event.hyperZonePlayer] ?: return
         val textures = state.latestTextures.get()?.takeIf(::canReplayTextures) ?: return
         if (state.selfAddPlayerSent.get()) {
@@ -141,7 +146,7 @@ class ProfileSkinSelfReplayService(
         ) ?: return
         state.latestTextures.set(textures)
 
-        val player = event.player() ?: return
+        val player = event.player()
         sendSelfAddPlayer(
             hyperZonePlayer = hyperZonePlayer,
             player = player,
@@ -202,8 +207,12 @@ class ProfileSkinSelfReplayService(
 
         if (!forceReplay && !state.selfAddPlayerSent.compareAndSet(false, true)) return
 
+        val replayUuid = hyperZonePlayer.clientOriginalUUID ?: run {
+            val prefix = "profile-skin"
+            RemapUtils.genUUID(hyperZonePlayer.clientOriginalName, prefix)
+        }
         val replayProfile = GameProfile(
-            hyperZonePlayer.clientOriginalUUID,
+            replayUuid,
             hyperZonePlayer.clientOriginalName,
             listOf(property),
         )

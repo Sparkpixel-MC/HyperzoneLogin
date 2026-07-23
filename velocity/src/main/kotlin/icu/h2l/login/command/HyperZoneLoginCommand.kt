@@ -154,12 +154,10 @@ class HyperZoneLoginCommand(
             messages.render(
                 sender,
                 MessageKeys.HzlCommand.UUID_HYPER_PLAYER,
-                HyperZoneMessagePlaceholder.text("verified", hyperZonePlayer.isVerified()),
-                HyperZoneMessagePlaceholder.text("attached_profile", hyperZonePlayer.hasAttachedProfile()),
-                HyperZoneMessagePlaceholder.text("waiting_area", hyperZonePlayer.isInWaitingArea()),
+                    HyperZoneMessagePlaceholder.text("attached_profile", hyperZonePlayer.hasAttachedProfile()),
                     HyperZoneMessagePlaceholder.text("registration_name",
-                        hyperZonePlayer.getSubmittedCredentials().firstOrNull()?.getRegistrationName()
-                            ?: hyperZonePlayer.clientOriginalName),
+                            hyperZonePlayer.getSubmittedCredentials().firstOrNull()?.getRegistrationName()
+                                ?: hyperZonePlayer.clientOriginalName),
                 HyperZoneMessagePlaceholder.text(
                         "can_create_profile",
                         (profileService as? icu.h2l.login.profile.VelocityHyperZoneProfileService)

@@ -37,6 +37,11 @@ enum class ReleaseChannel(val suffix: String) {
     SNAPSHOT("-SNAPSHOT"),
 }
 
+enum class ApiReleaseChannel(val suffix: String) {
+    RELEASE(""),
+    SNAPSHOT("-SNAPSHOT"),
+}
+
 fun toBlockCommentHeader(headerFile: File): String {
     val body = headerFile
         .readLines()
@@ -143,6 +148,11 @@ fun formatBaseVersion(
     else -> "${monthlyClock.year % 100}.${monthlyClock.monthValue}.$versionPatch"
 }
 
+fun formatApiVersion(
+    apiVersionBase: String,
+    apiReleaseChannel: ApiReleaseChannel,
+): String = apiVersionBase + apiReleaseChannel.suffix
+
 val versionClock: YearMonth = YearMonth.now()
 val weeklyVersionClock: LocalDate = LocalDate.now()
 val versionPatch = requireStringProperty("versionPatch").toIntOrNull()
@@ -166,6 +176,15 @@ val computedVersion = buildString {
 
 version = computedVersion
 
+val apiVersionBase = requireStringProperty("apiVersion")
+val apiReleaseChannel = runCatching {
+    ApiReleaseChannel.valueOf(requireStringProperty("apiReleaseChannel").uppercase())
+}.getOrElse {
+    error("Property 'apiReleaseChannel' must be one of: ${ApiReleaseChannel.entries.joinToString()}.")
+}
+val apiPublishedVersion = formatApiVersion(apiVersionBase, apiReleaseChannel)
+extra["apiPublishedVersion"] = apiPublishedVersion
+
 val kotlinLicenseHeader = toBlockCommentHeader(rootProject.file("HEADER.txt"))
 val kotlinSourceHeaderDelimiter = "^(package|@file:|import)"
 val kotlinGradleHeaderDelimiter = "^(import|plugins|buildscript|pluginManagement|dependencyResolutionManagement|rootProject|include)"
@@ -180,6 +199,7 @@ spotless {
             "data-merge/src/**/*.kt",
             "profile-skin/src/**/*.kt",
             "safe/src/**/*.kt",
+            "vc-runtest/src/**/*.kt",
             "velocity/src/**/*.kt",
         )
         licenseHeader(kotlinLicenseHeader, kotlinSourceHeaderDelimiter)
@@ -196,6 +216,7 @@ spotless {
             "data-merge/build.gradle.kts",
             "profile-skin/build.gradle.kts",
             "safe/build.gradle.kts",
+            "vc-runtest/build.gradle.kts",
             "velocity/build.gradle.kts",
         )
         licenseHeader(kotlinLicenseHeader, kotlinGradleHeaderDelimiter)
@@ -208,7 +229,7 @@ subprojects {
 
     plugins.withId("org.jetbrains.kotlin.jvm") {
         extensions.configure<org.jetbrains.kotlin.gradle.dsl.KotlinJvmProjectExtension> {
-            jvmToolchain(21)
+            jvmToolchain(25)
         }
     }
 
@@ -229,18 +250,48 @@ subprojects {
 
     tasks.withType(ProcessResources::class.java).configureEach {
         val pluginVersion = rootProject.version.toString()
+        // Declare pluginVersion as an input for up-to-date checking.
         inputs.property("pluginVersion", pluginVersion)
         filteringCharset = "UTF-8"
-        filesMatching("velocity-plugin.json") {
-            expand("pluginVersion" to pluginVersion)
+
+        // Avoid filesMatching { expand(...) } — that pattern creates a MatchingCopyAction
+        // which IntelliJ IDEA's Gradle model importer cannot resolve, flooding the sync
+        // output with "Cannot resolve resource filtering of MatchingCopyAction" warnings.
+        // Instead: exclude the raw template from the standard copy and inject the version
+        // via a doLast action that does a direct string replacement in the output file.
+        val srcTemplate = project.file("src/main/resources/velocity-plugin.json")
+        inputs.file(srcTemplate).optional(true)
+        exclude("velocity-plugin.json")
+        doLast("injectPluginVersion") {
+            if (!srcTemplate.exists()) return@doLast
+            val dst = destinationDir.resolve("velocity-plugin.json")
+            dst.parentFile.mkdirs()
+            dst.writeText(srcTemplate.readText().replace("\${pluginVersion}", pluginVersion))
         }
+    }
+
+    tasks.withType(Test::class.java).configureEach {
+        // MockK uses Byte Buddy for mocking; Java 25 is newer than Byte Buddy's
+        // officially supported range, so the experimental flag is required.
+        // The additional flags suppress JVM-level runtime warnings emitted when
+        // running on Java 23+:
+        //   - velocity-proxy pulls jline-terminal-ffm into the test classpath;
+        //     --enable-native-access=ALL-UNNAMED suppresses its FFM warning
+        //   - sun.misc.Unsafe::objectFieldOffset is terminally deprecated (JEP 471)
+        //   - Class-Data Sharing conflicts with bootstrap classpath injection
+        jvmArgs(
+            "-Dnet.bytebuddy.experimental=true",
+            "--enable-native-access=ALL-UNNAMED",
+            "--sun-misc-unsafe-memory-access=allow",
+            "-Xshare:off",
+        )
     }
 }
 
 val pluginBundleDir = layout.buildDirectory.dir("HZL")
 val splitPluginBundleDir = layout.buildDirectory.dir("HZL-split")
 
-val collectPluginJars by tasks.registering(Sync::class) {
+val collectPluginJars = tasks.register<Sync>("collectPluginJars") {
     group = "build"
     description = "Collects the all-in-one HyperZoneLogin jar into one distribution directory."
     into(pluginBundleDir)
@@ -250,7 +301,7 @@ val collectPluginJars by tasks.registering(Sync::class) {
     from(velocityProject.tasks.named("monolithJar", Jar::class).flatMap { it.archiveFile })
 }
 
-val collectSplitPluginJars by tasks.registering(Sync::class) {
+val collectSplitPluginJars = tasks.register<Sync>("collectSplitPluginJars") {
     group = "build"
     description = "Collects the split plugin distribution with the main plugin and optional module jars."
     into(splitPluginBundleDir)
@@ -260,7 +311,7 @@ val collectSplitPluginJars by tasks.registering(Sync::class) {
     from(velocityProject.tasks.named("jar", Jar::class).flatMap { it.archiveFile })
 
     subprojects
-        .filter { it.path != ":api" && it.path != ":velocity" }
+        .filter { it.path != ":api" && it.path != ":velocity" && it.path != ":vc-runtest" }
         .forEach { subproject ->
             val archiveTaskName = "jar"
             dependsOn(subproject.tasks.named(archiveTaskName))
@@ -272,20 +323,20 @@ val collectSplitPluginJars by tasks.registering(Sync::class) {
         }
 }
 
-val buildMonolith by tasks.registering {
+val buildMonolith = tasks.register("buildMonolith") {
     group = "build"
     description = "Builds the all-in-one HyperZoneLogin distribution."
     dependsOn(collectPluginJars)
 }
 
-val buildAllDistributions by tasks.registering {
+val buildAllDistributions = tasks.register("buildAllDistributions") {
     group = "build"
     description = "Builds both the all-in-one and split HyperZoneLogin distributions."
     dependsOn(collectPluginJars)
     dependsOn(collectSplitPluginJars)
 }
 
-val printVersionInfo by tasks.registering {
+val printVersionInfo = tasks.register("printVersionInfo") {
     group = "help"
     description = "Prints the resolved HyperZoneLogin version components."
     doLast {
@@ -293,6 +344,9 @@ val printVersionInfo by tasks.registering {
         println("  baseVersion    = $baseVersion")
         println("  releaseChannel = ${releaseChannel.name}")
         println("  gitIdentifier  = ${gitIdentifier ?: "<none>"}")
+        println("API version: $apiPublishedVersion")
+        println("  apiVersion     = $apiVersionBase")
+        println("  apiChannel     = ${apiReleaseChannel.name}")
     }
 }
 

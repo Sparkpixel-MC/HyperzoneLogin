@@ -44,19 +44,18 @@ import java.util.concurrent.atomic.AtomicReference
 /**
  * `HyperZonePlayer` 的 Velocity 实现。
  *
- * 这里维护三组彼此独立但互相关联的状态：
+ * 这里维护两组彼此独立但互相关联的状态：
  * 1. 连接/等待区状态：玩家是否仍在认证等待区实现内部；
- * 2. 认证状态：子模块是否已经认可本次登录；
- * 3. 凭证状态：子模块已经向当前会话提交了哪些可信凭证。
+ * 2. 凭证状态：子模块已经向当前会话提交了哪些可信凭证。
  *
  * 核心会在 overVerify() 时统一根据凭证 attach 正式 Profile。
- * 只有“认证通过 + 已 attach Profile”两个条件都满足时，
+ * 只有"已 attach Profile"条件满足时，
  * 玩家才允许离开等待区并使用正式游戏身份进入游戏区。
  */
 class VelocityHyperZonePlayer(
 //    最开始客户端传入的，不可信；仅用于调试、客户端回放与第一次拟定默认生成名
     override val clientOriginalName: String,
-    override val clientOriginalUUID: UUID,
+    override val clientOriginalUUID: UUID?,
     override val isOnlinePlayer: Boolean,
 ) : HyperZonePlayer {
 
@@ -68,12 +67,6 @@ class VelocityHyperZonePlayer(
     private var proxyPlayer: Player? = null
     private val hasBoundProxyPlayer = AtomicBoolean(false)
 
-    /**
-     * 认证链路状态，仅表示子模块是否认可本次登录。
-     *
-     * 该状态不代表一定能进入游戏区；还需要核心层已根据凭证 attach Profile。
-     */
-    private val isVerifiedState = AtomicBoolean(false)
     private val hasNotifiedReadyState = AtomicBoolean(false)
     private val submittedCredentials = CopyOnWriteArrayList<HyperZoneCredential>()
     private val coreAuthorizedOverVerify = AtomicBoolean(false)
@@ -157,12 +150,8 @@ class VelocityHyperZonePlayer(
         return submittedCredentials.toList()
     }
 
-    override fun isVerified(): Boolean {
-        return isVerifiedState.get()
-    }
-
     override fun canBind(): Boolean {
-        return isVerified()
+        return getSubmittedCredentials().isNotEmpty()
     }
 
     override fun overVerify() {
@@ -172,18 +161,16 @@ class VelocityHyperZonePlayer(
         }
 
         debug(HyperZoneDebugType.OUTPRE_TRACE) {
-            "hyperPlayer.overVerify before player=$clientOriginalName verified=${isVerifiedState.get()} attachedProfile=${hasAttachedProfile()} credentials=${submittedCredentials.map { it.javaClass.simpleName }} proxyBound=${proxyPlayer != null}"
+            "hyperPlayer.overVerify before player=$clientOriginalName attachedProfile=${hasAttachedProfile()} credentials=${submittedCredentials.map { it.javaClass.simpleName }} proxyBound=${proxyPlayer != null}"
         }
 
         HyperZoneLoginMain.getInstance().profileService.attachVerifiedCredentialProfile(this)
-        isVerifiedState.set(true)
         debug(HyperZoneDebugType.OUTPRE_TRACE) {
-            "hyperPlayer.overVerify after-attach player=$clientOriginalName verified=${isVerifiedState.get()} attachedProfile=${hasAttachedProfile()}"
+            "hyperPlayer.overVerify after-attach player=$clientOriginalName attachedProfile=${hasAttachedProfile()}"
         }
         if (!hasAttachedProfile()) {
             sendMessage(HyperZoneLoginMain.getInstance().messageService.render(this, MessageKeys.Player.VERIFIED_UNBOUND))
         }
-        tryLeaveWaiting()
     }
 
     internal fun runCoreAuthorizedOverVerify() {
@@ -196,7 +183,6 @@ class VelocityHyperZonePlayer(
     }
 
     override fun resetVerify() {
-        isVerifiedState.set(false)
         hasNotifiedReadyState.set(false)
         submittedCredentials.clear()
         authChannelIdRef.set(null)
@@ -240,10 +226,10 @@ class VelocityHyperZonePlayer(
 
     private fun tryLeaveWaiting() {
         debug(HyperZoneDebugType.OUTPRE_TRACE) {
-            "hyperPlayer.tryLeaveWaiting player=$clientOriginalName verified=${isVerifiedState.get()} attachedProfile=${hasAttachedProfile()} proxyBound=${proxyPlayer != null}"
+            "hyperPlayer.tryLeaveWaiting player=$clientOriginalName attachedProfile=${hasAttachedProfile()} proxyBound=${proxyPlayer != null}"
         }
 
-        if (!isVerifiedState.get() || !hasAttachedProfile()) {
+        if (!hasAttachedProfile()) {
             return
         }
 
@@ -299,7 +285,7 @@ class VelocityHyperZonePlayer(
     private fun notifyProfileConflict(conflictingPlayers: List<VelocityHyperZonePlayer>) {
         val conflictPlayerIds = conflictingPlayers.asSequence()
             .filter { it !== this }
-            .map { it.clientOriginalUUID }
+            .mapNotNull { it.clientOriginalUUID }
             .toSet()
         if (conflictPlayerIds.isEmpty()) {
             return

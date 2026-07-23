@@ -35,6 +35,7 @@ pluginManagement {
 rootProject.name = "HyperzoneLogin"
 
 include("velocity")
+include("vc-runtest")
 include("api")
 include("auth-floodgate")
 include("auth-yggd")

@@ -31,7 +31,7 @@ class OfflineWaitingAreaEventListener(
     @Subscribe
     fun onWaitingAreaJoin(event: VServerJoinEvent) {
         if (event.proxyPlayer.isOnlineMode) return
-        if (!event.hyperZonePlayer.isInWaitingArea()) return
+        if (event.hyperZonePlayer.hasAttachedProfile()) return
 
         authService.getJoinPrompts(event.proxyPlayer).forEach { line ->
             event.hyperZonePlayer.sendMessage(line)

@@ -22,6 +22,7 @@
 package icu.h2l.login.merge.service
 
 import icu.h2l.login.merge.config.MergeAmConfig
+import java.nio.file.Files
 import java.nio.file.Path
 import java.nio.file.Paths
 import java.sql.Connection
@@ -55,17 +56,12 @@ class AmSourceReader(
             }
 
             "SQLITE", "SQLITE_DB" -> {
-                Class.forName("org.sqlite.JDBC")
                 val sqlite = source.sqlite
                 val url = if (sqlite.jdbcUrl.isNotBlank()) {
                     sqlite.jdbcUrl
                 } else {
-                    val configuredPath = Paths.get(sqlite.path)
-                    val absolutePath = if (configuredPath.isAbsolute) {
-                        configuredPath.normalize()
-                    } else {
-                        dataDirectory.toAbsolutePath().normalize().resolve(configuredPath).normalize()
-                    }
+                    val absolutePath = resolveSqlitePath(sqlite.path)
+                    ensureSqliteDatabaseFileExists(absolutePath)
                     val dbPath = absolutePath.toString().replace('\\', '/')
                     val extraParams = sqlite.parameters.trim()
                     if (extraParams.isBlank()) {
@@ -74,6 +70,7 @@ class AmSourceReader(
                         "jdbc:sqlite:$dbPath?$extraParams"
                     }
                 }
+                Class.forName("org.sqlite.JDBC")
                 DriverManager.getConnection(url)
             }
 
@@ -81,6 +78,26 @@ class AmSourceReader(
                 throw IllegalArgumentException("不支持的源数据库类型: ${source.type}")
             }
         }
+    }
+
+    private fun resolveSqlitePath(configuredPathText: String): Path {
+        val configuredPath = Paths.get(configuredPathText)
+        return if (configuredPath.isAbsolute) {
+            configuredPath.normalize()
+        } else {
+            dataDirectory.toAbsolutePath().normalize().resolve(configuredPath).normalize()
+        }
+    }
+
+    private fun ensureSqliteDatabaseFileExists(absolutePath: Path) {
+        if (Files.isRegularFile(absolutePath)) {
+            return
+        }
+
+        throw IllegalStateException(
+            "未找到 AuthMe SQLite 数据库文件，请先将 AuthMe 数据库文件放到 '$absolutePath'，" +
+                "或修改 merge-am.conf 中的 source.sqlite.path / source.sqlite.jdbcUrl，避免 SQLite 自动创建空库。"
+        )
     }
 
     private fun readAuthMeRows(connection: Connection): List<AuthMeRow> {

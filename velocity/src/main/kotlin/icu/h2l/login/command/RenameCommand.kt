@@ -57,7 +57,7 @@ class RenameCommand : HyperChatCommandExecutor {
             return
         }
 
-        if (!hyperZonePlayer.isInWaitingArea()) {
+        if (hyperZonePlayer.hasAttachedProfile()) {
             messages.send(source, MessageKeys.Rename.NOT_IN_WAITING_AREA)
             return
         }

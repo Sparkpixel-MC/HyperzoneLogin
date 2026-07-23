@@ -19,11 +19,12 @@
  *
  */
 
-package icu.h2l.login.auth.online
+package icu.h2l.login.auth.online.listener
 
 import com.velocitypowered.api.event.PostOrder
 import com.velocitypowered.api.event.Subscribe
 import icu.h2l.api.event.auth.LoginReUuidEvent
+import icu.h2l.login.auth.online.credential.YggdrasilHyperZoneCredential
 
 /**
  * 响应 ReUuid 事件，销毁旧 Yggdrasil 凭证并以清除 UUID 建议的新凭证重新提交。
@@ -47,7 +48,7 @@ import icu.h2l.api.event.auth.LoginReUuidEvent
  * - 离线模块的 reUuid 同理：只影响 Profile 的内部 UUID，不影响 `offline_auth` 表
  *   以 `name` 为键的查找路径。
  */
-class YggdrasilReUuidListener {
+class ReUuidListener {
 
     @Subscribe(order = PostOrder.EARLY)
     fun onReUuid(event: LoginReUuidEvent) {

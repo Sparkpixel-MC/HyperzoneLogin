@@ -30,7 +30,7 @@ class LoginReUuidListener {
     @Subscribe
     fun onLoginReUuid(event: LoginReUuidEvent) {
         val player = event.hyperZonePlayer
-        if (!player.isInWaitingArea() || player.hasAttachedProfile()) {
+        if (player.hasAttachedProfile()) {
             return
         }
 

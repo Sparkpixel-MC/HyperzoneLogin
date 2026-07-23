@@ -19,7 +19,7 @@
  *
  */
 
-package icu.h2l.login.vServer.outpre.handler
+package icu.h2l.login.vServer.outpre.handler.bridge
 
 import com.velocitypowered.api.network.ProtocolVersion
 import com.velocitypowered.proxy.VelocityServer

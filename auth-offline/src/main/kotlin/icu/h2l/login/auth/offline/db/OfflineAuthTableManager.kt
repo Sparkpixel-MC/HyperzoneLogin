@@ -40,7 +40,7 @@ class OfflineAuthTableManager(
     @Suppress("DEPRECATION")
     fun createTable() {
         databaseManager.executeTransaction {
-            SchemaUtils.createMissingTablesAndColumns(offlineAuthTable)
+            SchemaUtils.createMissingTablesAndColumns(offlineAuthTable, withLogs = false)
         }
     }
 

@@ -19,7 +19,7 @@
  *
  */
 
-package icu.h2l.login.auth.online
+package icu.h2l.login.auth.online.main
 
 import com.google.inject.Inject
 import com.velocitypowered.api.event.Subscribe
@@ -27,12 +27,13 @@ import com.velocitypowered.api.event.proxy.ProxyInitializeEvent
 import com.velocitypowered.api.plugin.Plugin
 import com.velocitypowered.api.proxy.ProxyServer
 import icu.h2l.api.HyperZoneApiProvider
+import java.util.logging.Logger
 
 @Plugin(id = "hzl-auth-yggd", name = "HyperZoneLogin - Auth Yggdrasil")
 class AuthYggdPlugin @Inject constructor(
     private val server: ProxyServer
 ) {
-    private val logger = java.util.logging.Logger.getLogger("hzl-auth-yggd")
+    private val logger = Logger.getLogger("hzl-auth-yggd")
     @Subscribe
     fun onEnable(@Suppress("UNUSED_PARAMETER") e: ProxyInitializeEvent) {
         val mainPluginPresent = server.pluginManager.getPlugin("hyperzonelogin").isPresent

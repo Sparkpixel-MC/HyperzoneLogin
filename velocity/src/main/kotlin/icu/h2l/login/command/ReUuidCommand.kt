@@ -55,7 +55,7 @@ class ReUuidCommand : HyperChatCommandExecutor {
             return
         }
 
-        if (!hyperZonePlayer.isInWaitingArea()) {
+        if (hyperZonePlayer.hasAttachedProfile()) {
             messages.send(source, MessageKeys.ReUuid.NOT_IN_WAITING_AREA)
             return
         }
@@ -113,5 +113,4 @@ class ReUuidCommand : HyperChatCommandExecutor {
         }
     }
 }
-
 

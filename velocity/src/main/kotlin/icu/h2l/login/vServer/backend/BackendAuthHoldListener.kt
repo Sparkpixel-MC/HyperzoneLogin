@@ -152,7 +152,7 @@ class BackendAuthHoldListener(
          */
         hyperPlayer.injectProxyPlayer(player)
 
-        if (!hyperPlayer.isInWaitingArea()) return
+        if (hyperPlayer.hasAttachedProfile()) return
 
         val authServer = resolveAuthServer() ?: run {
             player.disconnect(messages.render(player, MessageKeys.BackendAuth.MISCONFIGURED_DISCONNECT))
@@ -226,7 +226,7 @@ class BackendAuthHoldListener(
 
         val authStartEvent = VServerAuthStartEvent(player, hyperPlayer)
         server.eventManager.fire(authStartEvent).join()
-        if (!hyperPlayer.isInWaitingArea() && state.inAuthHold) {
+        if (hyperPlayer.hasAttachedProfile() && state.inAuthHold) {
             state.inAuthHold = false
             state.verifiedExitPending = true
         }
@@ -545,5 +545,4 @@ class BackendAuthHoldListener(
         }
     }
 }
-
 

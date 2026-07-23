@@ -19,7 +19,7 @@
  *
  */
 
-package icu.h2l.login.auth.online.config.entry
+package icu.h2l.login.auth.online.config
 
 import org.spongepowered.configurate.objectmapping.ConfigSerializable
 import org.spongepowered.configurate.objectmapping.meta.Comment

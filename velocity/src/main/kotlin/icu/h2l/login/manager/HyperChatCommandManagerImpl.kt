@@ -90,7 +90,7 @@ object HyperChatCommandManagerImpl : HyperChatCommandManager {
             }.getOrNull()
         }
         if (!input.startsWith("/")) {
-            if (hyperPlayer != null && hyperPlayer.isInWaitingArea()) {
+            if (hyperPlayer != null && !hyperPlayer.hasAttachedProfile()) {
                 messages.send(source, MessageKeys.Chat.MUST_VERIFY_BEFORE_CHAT)
                 return true
             }
@@ -105,7 +105,7 @@ object HyperChatCommandManagerImpl : HyperChatCommandManager {
         val args = if (parts.size > 1) parts.drop(1).toTypedArray() else emptyArray()
 
         val registration = commands[label] ?: run {
-            if (hyperPlayer != null && hyperPlayer.isInWaitingArea()) {
+            if (hyperPlayer != null && !hyperPlayer.hasAttachedProfile()) {
                 messages.send(source, MessageKeys.Chat.ONLY_ALLOWED_COMMANDS)
                 return true
             }
@@ -132,6 +132,12 @@ object HyperChatCommandManagerImpl : HyperChatCommandManager {
 
     fun createAvailableCommandsPacket(source: Player): AvailableCommandsPacket {
         return populateAvailableCommandsPacket(AvailableCommandsPacket(), source)
+    }
+
+    fun createEmptyAvailableCommandsPacket(): AvailableCommandsPacket {
+        val packet = AvailableCommandsPacket()
+        availableCommandsRootNodeSetter.invoke(packet, RootCommandNode<CommandSource>())
+        return packet
     }
 
     fun populateAvailableCommandsPacket(packet: AvailableCommandsPacket, source: Player): AvailableCommandsPacket {

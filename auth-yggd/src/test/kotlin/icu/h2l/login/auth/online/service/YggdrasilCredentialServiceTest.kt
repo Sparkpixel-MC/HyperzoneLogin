@@ -19,7 +19,7 @@
  *
  */
 
-package icu.h2l.login.auth.online
+package icu.h2l.login.auth.online.service
 
 import com.velocitypowered.api.proxy.ProxyServer
 import com.velocitypowered.api.util.GameProfile
@@ -27,12 +27,13 @@ import icu.h2l.api.db.HyperZoneDatabaseManager
 import icu.h2l.api.db.Profile
 import icu.h2l.api.db.table.ProfileTable
 import icu.h2l.api.player.HyperZonePlayer
-import icu.h2l.api.player.HyperZonePlayerAccessor
 import icu.h2l.api.profile.HyperZoneCredential
 import icu.h2l.api.profile.HyperZoneProfileService
-import icu.h2l.login.auth.online.config.entry.EntryConfig
+import icu.h2l.login.auth.online.config.EntryConfig
+import icu.h2l.login.auth.online.credential.YggdrasilHyperZoneCredential
 import icu.h2l.login.auth.online.db.EntryTableManager
 import icu.h2l.login.auth.online.manager.EntryConfigManager
+import icu.h2l.login.auth.online.record.YggdrasilAuthResult
 import net.kyori.adventure.text.Component
 import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.Assertions.assertNull
@@ -42,10 +43,10 @@ import java.lang.reflect.Proxy
 import java.nio.file.Files
 import java.util.*
 
-class YggdrasilAuthModuleTest {
+class YggdrasilCredentialServiceTest {
     private lateinit var entryConfigManager: EntryConfigManager
     private lateinit var profileService: RecordingProfileService
-    private lateinit var module: YggdrasilAuthModule
+    private lateinit var service: YggdrasilCredentialService
 
     @BeforeEach
     fun setUp() {
@@ -68,14 +69,15 @@ class YggdrasilAuthModuleTest {
             proxyServer = proxyServer
         )
         profileService = RecordingProfileService()
-
-        module = YggdrasilAuthModule(
-            proxy = proxyServer,
-            entryConfigManager = entryConfigManager,
+        val entryDatabaseHelper = icu.h2l.login.auth.online.db.EntryDatabaseHelper(
             databaseManager = databaseManager,
-            entryTableManager = entryTableManager,
-            playerAccessor = interfaceStub(HyperZonePlayerAccessor::class.java),
-            profileService = profileService
+            entryTableManager = entryTableManager
+        )
+
+        service = YggdrasilCredentialService(
+            entryConfigManager = entryConfigManager,
+            profileService = profileService,
+            entryDatabaseHelper = entryDatabaseHelper
         )
     }
 
@@ -95,17 +97,17 @@ class YggdrasilAuthModuleTest {
         profileService.allowResolve("EnabledUser", enabledUuid, Profile(enabledProfileId, "EnabledUser", enabledUuid))
         profileService.allowResolve("DisabledUser", null, Profile(disabledProfileId, "DisabledUser", disabledUuid))
 
-        val enabledError = invokeEnsureCredential(
+        val enabledPreparation = invokeEnsureCredential(
             handler = enabledHandler,
             result = successResult(entryId = "mojang", userName = "EnabledUser", uuid = enabledUuid)
         )
-        val disabledError = invokeEnsureCredential(
+        val disabledPreparation = invokeEnsureCredential(
             handler = disabledHandler,
             result = successResult(entryId = "elyby", userName = "DisabledUser", uuid = disabledUuid)
         )
 
-        assertNull(enabledError)
-        assertNull(disabledError)
+        assertNull(enabledPreparation.failureReason)
+        assertNull(disabledPreparation.failureReason)
         assertEquals(
             listOf(
                 ResolveRequest("EnabledUser", enabledUuid),
@@ -131,12 +133,12 @@ class YggdrasilAuthModuleTest {
         setConfigs(entryConfig("other", false))
         profileService.allowResolve("FallbackUser", authenticatedUuid, Profile(profileId, "FallbackUser", authenticatedUuid))
 
-        val error = invokeEnsureCredential(
+        val preparation = invokeEnsureCredential(
             handler = handler,
             result = successResult(entryId = "missing", userName = "FallbackUser", uuid = authenticatedUuid)
         )
 
-        assertNull(error)
+        assertNull(preparation.failureReason)
         assertEquals(listOf(ResolveRequest("FallbackUser", authenticatedUuid)), profileService.canCreateCalls)
         assertEquals(listOf(ResolveRequest("FallbackUser", authenticatedUuid)), profileService.createCalls)
     }
@@ -144,15 +146,7 @@ class YggdrasilAuthModuleTest {
     private fun invokeEnsureCredential(
         handler: HyperZonePlayer,
         result: YggdrasilAuthResult.Success
-    ): String? {
-        val method = YggdrasilAuthModule::class.java.getDeclaredMethod(
-            "ensureCredentialForSuccessfulAuth",
-            HyperZonePlayer::class.java,
-            YggdrasilAuthResult.Success::class.java
-        )
-        method.isAccessible = true
-        return method.invoke(module, handler, result) as String?
-    }
+    ) = service.prepareCredentialForSuccessfulAuth(handler, result)
 
     private fun successResult(entryId: String, userName: String, uuid: UUID): YggdrasilAuthResult.Success {
         return YggdrasilAuthResult.Success(
@@ -266,8 +260,6 @@ class YggdrasilAuthModuleTest {
 
         override fun getSubmittedCredentials(): List<HyperZoneCredential> = submittedCredentials.toList()
 
-        override fun isVerified(): Boolean = false
-
         override fun canBind(): Boolean = true
 
         override fun overVerify() = Unit
@@ -281,6 +273,3 @@ class YggdrasilAuthModuleTest {
         override fun getAttachedGameProfile(): GameProfile = temporaryProfile
     }
 }
-
-
-

@@ -30,7 +30,7 @@ class LoginRenameListener {
     @Subscribe
     fun onLoginRename(event: LoginRenameEvent) {
         val player = event.hyperZonePlayer
-        if (!player.isInWaitingArea() || player.hasAttachedProfile()) {
+        if (player.hasAttachedProfile()) {
             return
         }
 

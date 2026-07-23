@@ -33,7 +33,7 @@ class OfflineSessionAuthListener(
         if (event.proxyPlayer.isOnlineMode) {
             return
         }
-        if (!event.hyperZonePlayer.isInWaitingArea()) {
+        if (event.hyperZonePlayer.hasAttachedProfile()) {
             return
         }
 
@@ -41,4 +41,3 @@ class OfflineSessionAuthListener(
         result.message?.let { event.hyperZonePlayer.sendMessage(it) }
     }
 }
-

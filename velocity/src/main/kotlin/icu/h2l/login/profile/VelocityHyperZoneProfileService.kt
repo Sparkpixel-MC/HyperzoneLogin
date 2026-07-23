@@ -172,7 +172,9 @@ class VelocityHyperZoneProfileService(
             }
         }
 
-        throw IllegalStateException(getCreateBlockedReason(userName, resolvedUuid) ?: "玩家 $userName 注册失败，未能创建 Profile")
+        throw IllegalStateException(
+            getCreateBlockedReason(userName, resolvedUuid) ?: "玩家 $userName 注册失败，未能创建 Profile"
+        )
     }
 
     override fun attachProfile(player: HyperZonePlayer, profileId: UUID): Profile? {
@@ -181,16 +183,7 @@ class VelocityHyperZoneProfileService(
             "profileService.attachProfile player=${player.clientOriginalName} profileId=${profile.id} profileName=${profile.name} profileUuid=${profile.uuid}"
         }
         attachedProfiles[player] = profile.id
-        runCatching {
-            HyperZoneLoginMain.getInstance().proxy.eventManager.fire(
-                ProfileAttachedEvent(player, profile)
-            ).join()
-        }.onFailure { throwable ->
-            HyperZoneLoginMain.getInstance().logger.error(
-                "玩家 ${player.clientOriginalName} attach Profile 事件分发失败: ${throwable.message}",
-                throwable
-            )
-        }
+        HyperZoneLoginMain.getInstance().proxy.eventManager.fire(ProfileAttachedEvent(player, profile))
         (player as? VelocityHyperZonePlayer)?.onAttachedProfileAvailable()
         return profile
     }

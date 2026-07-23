@@ -195,7 +195,7 @@ class OfflineAuthService(
 
     private fun loginInternal(player: Player, username: String?, password: String, totpCode: String? = null): Result {
         val hyperPlayer = playerAccessor.getByPlayer(player)
-        if (!hyperPlayer.isInWaitingArea()) {
+        if (hyperPlayer.hasAttachedProfile()) {
             return Result(false, OfflineAuthMessages.ALREADY_LOGGED_IN)
         }
 
@@ -362,7 +362,7 @@ class OfflineAuthService(
 
     fun logout(player: Player): Result {
         val hyperPlayer = playerAccessor.getByPlayer(player)
-        if (hyperPlayer.isInWaitingArea()) {
+        if (!hyperPlayer.hasAttachedProfile()) {
             return Result(false, OfflineAuthMessages.NOT_LOGGED_IN)
         }
 
@@ -557,7 +557,7 @@ class OfflineAuthService(
 
     fun getJoinPrompts(player: Player): List<Component> {
         val hyperPlayer = playerAccessor.getByPlayer(player)
-        if (!hyperPlayer.isInWaitingArea()) {
+        if (hyperPlayer.hasAttachedProfile()) {
             return emptyList()
         }
 
@@ -614,7 +614,7 @@ class OfflineAuthService(
         }
 
         val hyperPlayer = playerAccessor.getByPlayer(player)
-        if (!hyperPlayer.isInWaitingArea()) {
+        if (hyperPlayer.hasAttachedProfile()) {
             return SessionCheckResult(true)
         }
 

@@ -26,6 +26,8 @@ plugins {
     id("maven-publish")
 }
 
+version = rootProject.extra["apiPublishedVersion"].toString()
+
 dependencies {
 //    VC
     compileOnly(libs.velocityApi)
@@ -47,7 +49,8 @@ tasks.test {
     useJUnitPlatform()
 }
 
-// Publish configuration to allow `api` to be published to the local Maven repository
+// Publish configuration to allow `api` to be published to the local Maven repository.
+// API versioning is controlled independently via apiVersion/apiReleaseChannel.
 // Use `./gradlew :api:publishToMavenLocal` to publish.
 publishing {
     publications {

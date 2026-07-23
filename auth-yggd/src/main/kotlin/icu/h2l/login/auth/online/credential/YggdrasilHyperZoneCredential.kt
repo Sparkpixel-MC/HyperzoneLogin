@@ -19,7 +19,7 @@
  *
  */
 
-package icu.h2l.login.auth.online
+package icu.h2l.login.auth.online.credential
 
 import icu.h2l.api.profile.HyperZoneCredential
 import icu.h2l.login.auth.online.db.EntryDatabaseHelper
@@ -84,4 +84,3 @@ class YggdrasilHyperZoneCredential(
         private const val CHANNEL_ID = "yggdrasil"
     }
 }
-

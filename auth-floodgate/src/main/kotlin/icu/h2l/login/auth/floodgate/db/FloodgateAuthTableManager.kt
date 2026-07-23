@@ -40,7 +40,7 @@ class FloodgateAuthTableManager(
     @Suppress("DEPRECATION")
     fun createTable() {
         databaseManager.executeTransaction {
-            SchemaUtils.createMissingTablesAndColumns(floodgateAuthTable)
+            SchemaUtils.createMissingTablesAndColumns(floodgateAuthTable, withLogs = false)
         }
     }
 
@@ -59,4 +59,3 @@ class FloodgateAuthTableManager(
         }
     }
 }
-

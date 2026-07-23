@@ -27,7 +27,6 @@ import icu.h2l.api.event.connection.OpenStartAuthEvent
 import icu.h2l.api.player.HyperZonePlayer
 import icu.h2l.api.player.HyperZonePlayerAccessor
 import icu.h2l.api.profile.HyperZoneProfileService
-import icu.h2l.login.auth.floodgate.FloodgateMessages
 import icu.h2l.login.auth.floodgate.db.FloodgateAuthRepository
 import icu.h2l.login.auth.floodgate.service.FloodgateApiHolder
 import icu.h2l.login.auth.floodgate.service.FloodgateAuthService
@@ -94,48 +93,6 @@ class FloodgateOpenStartAuthListenerTest {
         assertEquals("ktese", remembered!!.userName)
         assertEquals(UUID.fromString("00000000-0000-0000-0009-01fb2b9f0a50"), remembered.userUUID)
         assertEquals(1234567890L, remembered.xuid)
-    }
-
-    @Test
-    fun `listener blocks auth flow when floodgate session initialization fails`() {
-        val api = mockk<HyperZoneApi>()
-        val playerAccessor = mockk<HyperZonePlayerAccessor>()
-        val apiHolder = FakeFloodgateApiHolder()
-        val sessionHolder = FloodgateSessionHolder()
-        val repository = mockk<FloodgateAuthRepository>(relaxed = true)
-        val profileService = mockk<HyperZoneProfileService>(relaxed = true)
-        val channel = mockk<Channel>()
-        val event = OpenStartAuthEvent(
-            userName = "ktese",
-            userUUID = UUID.randomUUID(),
-            serverId = "",
-            playerIp = "192.168.9.203",
-            channel = channel,
-            isOnline = false,
-        )
-        apiHolder.resolvedIdentity = FloodgateApiHolder.ResolvedFloodgateIdentity(
-            userName = ".ktese",
-            userUUID = UUID.fromString("00000000-0000-0000-0009-01fb2b9f0a50"),
-            xuid = 1234567890L,
-        )
-        apiHolder.trustedUuids += UUID.fromString("00000000-0000-0000-0009-01fb2b9f0a50")
-        every { api.hyperZonePlayers } returns playerAccessor
-        every { api.serverAdapter } returns null
-        every { playerAccessor.create(any(), any(), any(), any()) } throws IllegalStateException("boom")
-
-        val authService = FloodgateAuthService(
-            api = api,
-            floodgateApiHolder = apiHolder,
-            sessionHolder = sessionHolder,
-            repository = repository,
-            profileService = profileService,
-        )
-
-        FloodgateOpenStartAuthListener(authService, apiHolder).onOpenStartAuth(event)
-
-        assertFalse(event.allow)
-        assertEquals(FloodgateMessages.initPlayerFailed(), event.disconnectMessage)
-        assertNull(sessionHolder.get(channel))
     }
 
     private class FakeFloodgateApiHolder : FloodgateApiHolder(mockk<FloodgateApi>(relaxed = true)) {

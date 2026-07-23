@@ -23,6 +23,7 @@ package icu.h2l.login.merge.service
 
 import icu.h2l.login.merge.config.MergeMlConfig
 import java.nio.ByteBuffer
+import java.nio.file.Files
 import java.nio.file.Path
 import java.nio.file.Paths
 import java.sql.Connection
@@ -64,22 +65,17 @@ class MlSourceReader(
                 DriverManager.getConnection(url, mysql.username, mysql.password)
             }
             "H2DB", "H2" -> {
-                Class.forName("org.h2.Driver")
                 val h2 = source.h2
                 val url = if (h2.jdbcUrl.isNotBlank()) {
                     h2.jdbcUrl
                 } else {
-                    val normalizedPath = h2.path.removeSuffix(".mv.db")
-                    val configuredPath = Paths.get(normalizedPath)
-                    val absolutePath = if (configuredPath.isAbsolute) {
-                        configuredPath.normalize()
-                    } else {
-                        dataDirectory.toAbsolutePath().normalize().resolve(configuredPath).normalize()
-                    }
+                    val absolutePath = resolveH2DatabaseBasePath(h2.path)
+                    ensureH2DatabaseFileExists(absolutePath)
                     val dbPath = absolutePath.toString().replace('\\', '/')
                     "jdbc:h2:file:$dbPath;${h2.parameters}"
                 }
 
+                Class.forName("org.h2.Driver")
                 try {
                     DriverManager.getConnection(url, h2.username, h2.password)
                 } catch (ex: SQLException) {
@@ -96,6 +92,32 @@ class MlSourceReader(
                 throw IllegalArgumentException("不支持的源数据库类型: ${source.type}")
             }
         }
+    }
+
+    private fun resolveH2DatabaseBasePath(configuredPathText: String): Path {
+        val normalizedPath = configuredPathText.removeSuffix(".mv.db").removeSuffix(".h2.db")
+        val configuredPath = Paths.get(normalizedPath)
+        return if (configuredPath.isAbsolute) {
+            configuredPath.normalize()
+        } else {
+            dataDirectory.toAbsolutePath().normalize().resolve(configuredPath).normalize()
+        }
+    }
+
+    private fun ensureH2DatabaseFileExists(absolutePath: Path) {
+        val candidateFiles = listOf(
+            absolutePath.resolveSibling("${absolutePath.fileName}.mv.db"),
+            absolutePath.resolveSibling("${absolutePath.fileName}.h2.db")
+        )
+        if (candidateFiles.any(Files::isRegularFile)) {
+            return
+        }
+
+        val expectedFiles = candidateFiles.joinToString(" / ") { "'$it'" }
+        throw IllegalStateException(
+            "未找到 ML H2 数据库文件，请先将 MultiLogin 数据库文件放到 $expectedFiles，" +
+                "或修改 merge-ml.conf 中的 source.h2.path / source.h2.jdbcUrl，避免 H2 自动创建空库。"
+        )
     }
 
     private fun readProfiles(connection: Connection): List<MlInGameProfileRow> {

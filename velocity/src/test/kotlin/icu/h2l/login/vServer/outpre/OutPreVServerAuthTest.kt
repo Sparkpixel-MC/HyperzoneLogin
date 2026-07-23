@@ -38,6 +38,8 @@ import io.mockk.every
 import io.mockk.just
 import io.mockk.mockk
 import io.mockk.runs
+import io.mockk.spyk
+import io.mockk.verify
 import io.netty.channel.embedded.EmbeddedChannel
 import net.kyori.adventure.text.logger.slf4j.ComponentLogger
 import org.junit.jupiter.api.AfterEach
@@ -52,40 +54,75 @@ class OutPreVServerAuthTest {
     private val sessions = mutableListOf<TestSession>()
 
     @Test
-    fun `beginInitialJoin registers outpre state before auth start listeners run`() {
+    fun `beginInitialJoin defers auth start until auth server joined`() {
         val eventManager = mockk<EventManager>()
         val proxyServer = mockk<ProxyServer>()
         every { proxyServer.eventManager } returns eventManager
 
-        val outPre = OutPreVServerAuth(proxyServer)
+        val outPre = spyk(OutPreVServerAuth(proxyServer))
         bootstrapMain(proxyServer, outPre)
-        val session = createSession(isActiveStates = listOf(false))
+        val session = createSession(isActiveStates = listOf(true))
+        val bridge = mockk<OutPreBackendBridge>(relaxed = true)
+        every { bridge.connect() } returns CompletableFuture.completedFuture(mockk(relaxed = true))
+        val bridgeCallbackSlot = io.mockk.slot<OutPreBackendBridge.Callback>()
+        every { bridge.bindSession(capture(bridgeCallbackSlot)) } just runs
+        every { outPre.createBridge(any()) } returns bridge
         val handler = mockk<OutPreAuthSessionHandler>(relaxed = true)
         val statesField = OutPreVServerAuth::class.java.getDeclaredField("states").apply {
             isAccessible = true
         }
+
+        @Test
+        fun `beginInitialJoin fires auth start immediately for struck mode`() {
+            val eventManager = mockk<EventManager>()
+            val proxyServer = mockk<ProxyServer>()
+            every { proxyServer.eventManager } returns eventManager
+
+            val outPre = OutPreVServerAuth(proxyServer)
+            bootstrapMain(proxyServer, outPre)
+            val session = createSession(isActiveStates = listOf(true), isOnline = true)
+            val bridge = mockk<OutPreBackendBridge>(relaxed = true)
+            val handler = mockk<OutPreAuthSessionHandler>(relaxed = true)
+            every { outPre.createBridge(any()) } returns bridge
+            var authStartFired = false
+
+            every { eventManager.fire(any<Any>()) } answers {
+                val event = firstArg<Any>()
+                if (event is VServerAuthStartEvent) {
+                    authStartFired = true
+                }
+                CompletableFuture.completedFuture(event)
+            }
+
+            outPre.beginInitialJoin(session.player, handler)
+
+            assertTrue(authStartFired)
+            verify(exactly = 0) { bridge.connect() }
+        }
+        var authStartFired = false
         var stateWasVisibleDuringAuthStart = false
-        var verifiedExitPending = false
-        var authHoldReleased = false
+        var authServerJoinedAtAuthStart = false
 
         every { eventManager.fire(any<Any>()) } answers {
             val event = firstArg<Any>()
             if (event is VServerAuthStartEvent) {
+                authStartFired = true
                 val state = currentState(outPre, session.channel, statesField)
                 stateWasVisibleDuringAuthStart = state != null
-                outPre.onVerified(session.player)
-                verifiedExitPending = state?.readBoolean("verifiedExitPending") == true
-                authHoldReleased = state?.readBoolean("inAuthHold") == false
+                authServerJoinedAtAuthStart = state?.readBoolean("hasConnectedToAuthServerOnce") == true
             }
             CompletableFuture.completedFuture(event)
         }
 
         outPre.beginInitialJoin(session.player, handler)
+        assertFalse(authStartFired)
 
+        bridgeCallbackSlot.captured.onJoined()
+
+        assertTrue(authStartFired)
         assertTrue(stateWasVisibleDuringAuthStart)
-        assertTrue(verifiedExitPending)
-        assertTrue(authHoldReleased)
-        assertFalse(hasState(outPre, session.channel, statesField))
+        assertTrue(authServerJoinedAtAuthStart)
+        assertTrue(hasState(outPre, session.channel, statesField))
     }
 
     @AfterEach
@@ -119,7 +156,7 @@ class OutPreVServerAuthTest {
         return VelocityHyperZoneProfileService(DatabaseHelper(databaseManager))
     }
 
-    private fun createSession(isActiveStates: List<Boolean>): TestSession {
+    private fun createSession(isActiveStates: List<Boolean>, isOnline: Boolean = false): TestSession {
         val channel = EmbeddedChannel()
         val connection = mockk<MinecraftConnection>(relaxed = true)
         every { connection.channel } returns channel
@@ -135,7 +172,7 @@ class OutPreVServerAuthTest {
             channel = channel,
             userName = "BedrockUser",
             uuid = TEST_UUID,
-            isOnline = false,
+            isOnline = isOnline,
         )
 
         return TestSession(channel, player).also(sessions::add)
@@ -174,8 +211,6 @@ class OutPreVServerAuthTest {
         private val TEST_UUID: UUID = UUID.fromString("88888888-8888-4888-8888-888888888888")
     }
 }
-
-
 
 
 

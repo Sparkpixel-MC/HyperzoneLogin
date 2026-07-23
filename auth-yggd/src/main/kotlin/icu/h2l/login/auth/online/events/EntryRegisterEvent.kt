@@ -21,7 +21,7 @@
 
 package icu.h2l.login.auth.online.events
 
-import icu.h2l.login.auth.online.config.entry.EntryConfig
+import icu.h2l.login.auth.online.config.EntryConfig
 
 /**
  * Entry 注册事件

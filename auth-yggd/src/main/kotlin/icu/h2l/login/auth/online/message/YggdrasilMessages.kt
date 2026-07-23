@@ -19,7 +19,7 @@
  *
  */
 
-package icu.h2l.login.auth.online
+package icu.h2l.login.auth.online.message
 
 import icu.h2l.api.message.HyperZoneMessagePlaceholder
 import icu.h2l.api.message.HyperZoneMessageServiceProvider
@@ -105,4 +105,3 @@ object YggdrasilMessages {
             })
     }
 }
-

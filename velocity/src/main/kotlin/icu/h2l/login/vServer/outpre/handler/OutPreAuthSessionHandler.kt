@@ -35,7 +35,10 @@ import com.velocitypowered.api.util.GameProfile
 import com.velocitypowered.proxy.VelocityServer
 import com.velocitypowered.proxy.connection.MinecraftConnection
 import com.velocitypowered.proxy.connection.MinecraftSessionHandler
-import com.velocitypowered.proxy.connection.client.*
+import com.velocitypowered.proxy.connection.client.AuthSessionHandler
+import com.velocitypowered.proxy.connection.client.ClientConfigSessionHandler
+import com.velocitypowered.proxy.connection.client.ConnectedPlayer
+import com.velocitypowered.proxy.connection.client.LoginInboundConnection
 import com.velocitypowered.proxy.protocol.StateRegistry
 import com.velocitypowered.proxy.protocol.packet.LoginAcknowledgedPacket
 import com.velocitypowered.proxy.protocol.packet.ServerLoginSuccessPacket
@@ -68,14 +71,14 @@ import java.util.concurrent.CompletableFuture
 private val logger: Logger = LogManager.getLogger(AuthSessionHandler::class.java)
 
 /**
- * outpre 模式的登录完成处理器。
+ * outpre 模式的登录完成处理器。入口点。
  *
  * 第一阶段只完成"客户端可进入代理 + 认证服桥接"；
  * 真正的 Velocity 注册 / GameProfileRequest / Login / PostLogin
  * 会在认证完成后再继续执行。
  */
 open class OutPreAuthSessionHandlerLogic(
-    protected val server: VelocityServer,
+    internal val server: VelocityServer,
     protected val inbound: LoginInboundConnection,
     initialProfile: GameProfile,
     protected val onlineMode: Boolean,
@@ -83,7 +86,7 @@ open class OutPreAuthSessionHandlerLogic(
     protected val outPre: OutPreVServerAuth,
 ) {
 
-    protected val mcConnection: MinecraftConnection = inbound.reflectedDelegatedConnection()
+    internal val mcConnection: MinecraftConnection = inbound.reflectedDelegatedConnection()
     protected var profile: GameProfile = initialProfile
     protected var loginState = State.START
     protected val connectedPlayer = NettyReflectionHelper.createConnectedPlayer(
@@ -92,8 +95,13 @@ open class OutPreAuthSessionHandlerLogic(
         profile = profile,
         onlineMode = onlineMode,
     )
-    val bridge = outPre.createBridge(connectedPlayer)
+    internal var supportConfig: Boolean = false
     protected val eventLoop: EventLoop = mcConnection.eventLoop()
+
+    internal fun onReleased(preferredTargetServerName: String?) {
+        loginState = State.RELEASED
+        connectToReleasedTarget(connectedPlayer, preferredTargetServerName)
+    }
 
     protected fun startTemporaryLoginPhase(player: ConnectedPlayer) {
         debug(HyperZoneDebugType.OUTPRE_TRACE) {
@@ -110,7 +118,8 @@ open class OutPreAuthSessionHandlerLogic(
         }
 
 //        就用我们自己的往回发，别管，这样皮肤兼容性好
-        val playerUniqueId: UUID = player.uniqueId
+//        val playerUniqueId: UUID = player.uniqueId
+        val playerUniqueId: UUID = UUID.randomUUID()
 //        if (server.configuration.playerInfoForwardingMode == PlayerInfoForwarding.NONE) {
 //            playerUniqueId = UuidUtils.generateOfflinePlayerUuid(player.username)
 //        }
@@ -182,7 +191,7 @@ open class OutPreAuthSessionHandlerLogic(
         }
 
         debug(HyperZoneDebugType.OUTPRE_TRACE) {
-            "outpre.handler.completeAfterVerification start channel=${mcConnection.channel.id()} player=${connectedPlayer.username} preferredTarget=$preferredTargetServerName waitingArea=${hyperPlayer.isInWaitingArea()} verified=${hyperPlayer.isVerified()} attachedProfile=${hyperPlayer.hasAttachedProfile()} credentials=${
+            "outpre.handler.completeAfterVerification start channel=${mcConnection.channel.id()} player=${connectedPlayer.username} preferredTarget=$preferredTargetServerName attachedProfile=${hyperPlayer.hasAttachedProfile()} credentials=${
                 hyperPlayer.getSubmittedCredentials().map { it.javaClass.simpleName }
             }"
         }
@@ -248,7 +257,7 @@ open class OutPreAuthSessionHandlerLogic(
                             NettyReflectionHelper.setPermissionFunction(connectedPlayer, function)
                         }
 
-                        server.eventManager.fire(LoginEvent(connectedPlayer)).thenAcceptAsync({ loginEvent ->
+                        server.eventManager.fire(LoginEvent(connectedPlayer, serverIdHash)).thenAcceptAsync({ loginEvent ->
                             if (mcConnection.isClosed) {
                                 server.eventManager.fireAndForget(
                                     DisconnectEvent(
@@ -292,34 +301,8 @@ open class OutPreAuthSessionHandlerLogic(
         debug(HyperZoneDebugType.OUTPRE_TRACE) {
             "outpre.handler.continueReleasedFlow channel=${mcConnection.channel.id()} player=${player.username} preferredTarget=$preferredTargetServerName"
         }
-        val releaseAction = {
-            loginState = State.RELEASED
-//            先释放再链接
-            NettyReflectionHelper.setConnectionInFlight(player, null)
-            VelocityInternalAccess.setConnectedServer(player, bridge.serverConnection)
-            bridge.serverConnection.completeJoin()
-            connectToReleasedTarget(player, preferredTargetServerName)
-//            server.eventManager.fire(PostLoginEvent(player)).thenCompose {
-//                connectToReleasedTarget(player, preferredTargetServerName)
-//            }.exceptionally { ex ->
-//                logger.error("Exception while continuing outpre flow for {}", player, ex)
-//                null
-//            }
-            Unit
-        }
-
-//        com.velocitypowered.proxy.connection.client.ConnectedPlayer.ConnectionRequestBuilderImpl.internalConnect
-//        应该使用这套逻辑，所以不需要设置SessionHandler
-        val clientHandler = mcConnection.activeSessionHandler as? OutPreClientBridgeSessionHandler
-        outPre.markInitialFlowReleased(player)
-        if (clientHandler == null) {
-//            没有的话是bug
-            throw IllegalStateException(
-                "no Required clientHandler",
-            )
-        }
-
-        clientHandler.releaseToVelocity(server, releaseAction)
+        outPre.getInitialSession(player)?.release(outPre, this as OutPreAuthSessionHandler, preferredTargetServerName)
+            ?: throw IllegalStateException("no session for player ${player.username} during release flow")
     }
 
     private fun connectToReleasedTarget(
@@ -365,19 +348,13 @@ open class OutPreAuthSessionHandlerLogic(
             logger.error("Exception while continuing outpre flow for {}", connectedPlayer, ex)
             null
         }
-
-//        connectBackend(supportConfig)
     }
 
     fun connectBackend(supportConfig: Boolean) {
         debug(HyperZoneDebugType.OUTPRE_TRACE) {
             "connectBackend channel=${mcConnection.channel.id()} player=${connectedPlayer.username} supportConfig=$supportConfig"
         }
-        NettyReflectionHelper.setConnectionInFlight(connectedPlayer, bridge.serverConnection)
-        mcConnection.setActiveSessionHandler(
-            if (supportConfig) StateRegistry.CONFIG else StateRegistry.LOGIN,
-            OutPreClientBridgeSessionHandler(connectedPlayer, bridge, supportConfig)
-        )
+        this.supportConfig = supportConfig
         outPre.beginInitialJoin(connectedPlayer, this as OutPreAuthSessionHandler)
     }
 

@@ -318,7 +318,7 @@ class ProfileSkinService(
     fun onServerLoginSuccess(event: ServerLoginSuccessEvent) {
 
         event.rewritePacket = true
-        event.uuid = event.hyperZonePlayer.clientOriginalUUID
+        event.uuid = event.hyperZonePlayer.clientOriginalUUID ?: event.currentUuid
     }
 
     private fun restoreTextures(source: ProfileSkinSource): ProfileSkinTextures {

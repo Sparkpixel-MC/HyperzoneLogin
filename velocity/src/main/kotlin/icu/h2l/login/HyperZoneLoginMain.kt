@@ -58,6 +58,8 @@ import icu.h2l.login.module.EmbeddedModuleSpec
 import icu.h2l.login.profile.CredentialChannelRegistryImpl
 import icu.h2l.login.profile.ProfileBindingCodeService
 import icu.h2l.login.profile.VelocityHyperZoneProfileService
+import icu.h2l.login.util.isSnapshotPluginVersion
+import icu.h2l.login.util.readRuntimePluginVersion
 import icu.h2l.login.util.registerApiLogger
 import icu.h2l.login.vServer.backend.BackendAuthHoldListener
 import icu.h2l.login.vServer.backend.compat.BackendLoginProfileReplaceListener
@@ -323,6 +325,10 @@ class HyperZoneLoginMain(
     }
 
     private fun logInternalTestWarning() {
+        val pluginVersion = readRuntimePluginVersion(javaClass.classLoader)
+        if (!isSnapshotPluginVersion(pluginVersion)) {
+            return
+        }
         logger.warn("========================================")
         logger.warn("=== ⚠ 内测版本，可能有 bug，请勿分发 ===")
         logger.warn("========================================")

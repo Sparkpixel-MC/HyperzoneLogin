@@ -2,13 +2,13 @@ metadata.format.version = "1.1"
 
 [versions]
 
-velocity = "3.5.0-SNAPSHOT"
+velocity = "4.1.0-SNAPSHOT"
 asm = "9.7"
 shadow = "9.4.1"
 spotless = "7.2.1"
 configurate = "4.2.0"
 adventure = "4.19.0"
-kotlin = "2.3.20"
+kotlin = "2.4.0"
 angusMail = "2.0.4"
 googleAuth = "1.5.0"
 
@@ -27,7 +27,6 @@ floodgate = "2.2.0-SNAPSHOT"
 bstats = "3.2.1"
 jarRelocator = "1.7"
 junitBom = "5.10.0"
-jetbrainsAnnotations = "26.0.2"
 
 [libraries]
 
@@ -43,18 +42,13 @@ asm = { group = "org.ow2.asm", name = "asm", version.ref = "asm" }
 asmCommons = { group = "org.ow2.asm", name = "asm-commons", version.ref = "asm" }
 
 exposedCore = { group = "org.jetbrains.exposed", name = "exposed-core", version.ref = "exposed" }
-exposedDao = { group = "org.jetbrains.exposed", name = "exposed-dao", version.ref = "exposed" }
 exposedJdbc = { group = "org.jetbrains.exposed", name = "exposed-jdbc", version.ref = "exposed" }
-exposedJavaTime = { group = "org.jetbrains.exposed", name = "exposed-java-time", version.ref = "exposed" }
 
 h2 = { group = "com.h2database", name = "h2", version.ref = "h2" }
 sqliteJdbc = { group = "org.xerial", name = "sqlite-jdbc", version.ref = "sqlite" }
 mysql = { group = "com.mysql", name = "mysql-connector-j", version.ref = "mysql" }
 mariadb = { group = "org.mariadb.jdbc", name = "mariadb-java-client", version.ref = "mariadb" }
 hikari = { group = "com.zaxxer", name = "HikariCP", version.ref = "hikari" }
-kotlinStdlib = { module = "org.jetbrains.kotlin:kotlin-stdlib" }
-kotlinReflect = { module = "org.jetbrains.kotlin:kotlin-reflect" }
-jetbrainsAnnotations = { group = "org.jetbrains", name = "annotations", version.ref = "jetbrainsAnnotations" }
 
 floodgateApi = { group = "org.geysermc.floodgate", name = "api", version.ref = "floodgate" }
 bstatsVelocity = { group = "org.bstats", name = "bstats-velocity", version.ref = "bstats" }

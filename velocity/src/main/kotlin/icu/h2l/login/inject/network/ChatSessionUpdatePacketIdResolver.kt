@@ -29,6 +29,7 @@ import icu.h2l.login.reflect.ProtocolVersionCompat.noLessThanCompat
 object ChatSessionUpdatePacketIdResolver {
     fun resolve(protocolVersion: ProtocolVersion): Int? {
         return when {
+//            ViaVersion - CHAT_SESSION_UPDATE
             protocolVersion == ProtocolVersion.MINECRAFT_1_19_3 -> 0x20
 
             protocolVersion.noLessThan(ProtocolVersion.MINECRAFT_1_19_4)

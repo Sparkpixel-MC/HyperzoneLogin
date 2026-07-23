@@ -66,8 +66,8 @@ interface HyperZoneVServerAdapter {
     /**
      * 判断玩家当前是否仍物理处于等待区实现内部。
      *
-     * 这里和 [icu.h2l.api.player.HyperZonePlayer.isInWaitingArea] 不同：
-     * 后者描述的是“认证/Profile 链路是否仍未完成”，
+     * 这里和 [icu.h2l.api.player.HyperZonePlayer.hasAttachedProfile] 不同：
+     * 后者描述的是“玩家是否已 attach 正式游戏档案”，
      * 而这里要求由具体实现返回“玩家当前是否仍在该等待区实现内部”这一运行态。
      */
     fun isPlayerInWaitingArea(player: Player): Boolean = false

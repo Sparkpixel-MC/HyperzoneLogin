@@ -37,7 +37,7 @@ class ProfileSkinCacheTableManager(
     fun createTable() {
         databaseManager.executeTransaction {
             // 这里先用 Exposed 的补表补列能力平滑升级既有安装，后续如引入正式迁移框架再替换。
-            SchemaUtils.createMissingTablesAndColumns(cacheTable, profileTable)
+            SchemaUtils.createMissingTablesAndColumns(cacheTable, profileTable, withLogs = false)
         }
     }
 
@@ -57,4 +57,3 @@ class ProfileSkinCacheTableManager(
         }
     }
 }
-

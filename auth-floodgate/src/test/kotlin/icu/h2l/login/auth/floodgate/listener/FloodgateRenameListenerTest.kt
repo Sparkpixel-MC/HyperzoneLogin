@@ -135,7 +135,6 @@ class FloodgateRenameListenerTest {
         private val credentials = mutableListOf<HyperZoneCredential>()
 
         override fun hasAttachedProfile(): Boolean = false
-        override fun isVerified(): Boolean = false
         override fun canBind(): Boolean = false
         override fun overVerify() {}
         override fun resetVerify() { credentials.clear() }
@@ -157,5 +156,4 @@ class FloodgateRenameListenerTest {
         override fun getSubmittedCredentials(): List<HyperZoneCredential> = credentials.toList()
     }
 }
-
 

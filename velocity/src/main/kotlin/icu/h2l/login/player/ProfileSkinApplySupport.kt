@@ -67,7 +67,7 @@ object ProfileSkinApplySupport {
             hyperZonePlayer.getAttachedGameProfile()
         }.getOrElse { throwable ->
             debug(HyperZoneDebugType.PROFILE_SKIN) {
-                "[ProfileSkinFlow] apply aborted: clientOriginal=${hyperZonePlayer.clientOriginalName}, reason=${throwable.message ?: throwable.javaClass.simpleName}, waitingArea=${hyperZonePlayer.isInWaitingArea()}, attachedProfile=${hyperZonePlayer.hasAttachedProfile()}"
+                "[ProfileSkinFlow] apply aborted: clientOriginal=${hyperZonePlayer.clientOriginalName}, reason=${throwable.message ?: throwable.javaClass.simpleName}, attachedProfile=${hyperZonePlayer.hasAttachedProfile()}"
             }
             null
         }
@@ -86,5 +86,4 @@ object ProfileSkinApplySupport {
         )
     }
 }
-
 
