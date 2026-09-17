@@ -40,8 +40,7 @@ import icu.h2l.login.manager.HyperZonePlayerManager
 import icu.h2l.login.manager.LoginManager
 import icu.h2l.login.message.MessageKeys
 import icu.h2l.login.player.VelocityHyperZonePlayer
-import icu.h2l.login.util.resolveVelocityInitialTargetServerName
-import java.util.*
+import java.util.Locale
 import java.util.concurrent.ConcurrentHashMap
 
 /**
@@ -136,7 +135,7 @@ class BackendAuthHoldListener(
     override fun isPlayerInWaitingArea(player: Player): Boolean {
         val state = backendHoldStates[player.getChannel()]
         return isOnBackendAuthServer(player, state?.authServerName ?: configuredAuthServerName()) ||
-            (state?.hasConnectedToAuthServerOnce == false)
+                (state?.hasConnectedToAuthServerOnce == false)
     }
 
     @Subscribe
@@ -254,21 +253,51 @@ class BackendAuthHoldListener(
         }, player.getChannel().eventLoop())
     }
 
+    /**
+     * 根据 Velocity 的 Forced Host / 连接顺序动态解析认证后的目标服务器。
+     * 优先级：Forced Host / attemptConnectionOrder > 记忆目标 (preferredTarget) > 任意非认证服。
+     */
     private fun resolvePostAuthTarget(
         player: Player,
         authServer: RegisteredServer,
         preferredTargetServerName: String?
     ): String? {
-        val authServerName = authServer.serverInfo.name
+        return resolvePostAuthTarget(
+            player = player,
+            authServerName = authServer.serverInfo.name,
+            preferredTarget = preferredTargetServerName,
+        )
+    }
 
-        val directTarget = preferredTargetServerName
-            ?.takeUnless { it.isBlank() || it.equals(authServerName, ignoreCase = true) }
-            ?.takeIf { server.getServer(it).isPresent }
-        if (directTarget != null) {
-            return directTarget
+    /**
+     * 根据 Velocity 的 Forced Host / 连接顺序动态解析认证后的目标服务器。
+     * 优先级：Forced Host / attemptConnectionOrder > 记忆目标 (preferredTarget) > 任意非认证服。
+     */
+    private fun resolvePostAuthTarget(
+        player: Player,
+        authServerName: String,
+        preferredTarget: String?,
+    ): String? {
+        val config = server.configuration
+
+        val hostKey = player.virtualHost.map { it.hostString.lowercase(Locale.ROOT) }.orElse("")
+        val forcedOrder = config.forcedHosts[hostKey].orEmpty()
+        val connectionOrder = forcedOrder.ifEmpty {
+            config.attemptConnectionOrder
         }
 
-        return resolveVelocityInitialTargetServerName(server, player, authServerName)
+        connectionOrder.firstOrNull { candidate ->
+            !candidate.equals(authServerName, ignoreCase = true) && server.getServer(candidate).isPresent
+        }?.let { return it }
+
+        preferredTarget
+            ?.takeUnless { it.isBlank() || it.equals(authServerName, ignoreCase = true) }
+            ?.takeIf { server.getServer(it).isPresent }
+            ?.let { return it }
+
+        return server.allServers.firstOrNull { candidate ->
+            !candidate.serverInfo.name.equals(authServerName, ignoreCase = true)
+        }?.serverInfo?.name
     }
 
     private fun fireJoin(
@@ -333,8 +362,11 @@ class BackendAuthHoldListener(
          */
         val state = backendHoldStates[player.getChannel()]
         val authServerName = state?.authServerName ?: configuredAuthServerName()
-        val returnTarget = state?.returnTargetServerName
-            ?: resolveVelocityInitialTargetServerName(server, player, authServerName)
+        val returnTarget = resolvePostAuthTarget(
+            player = player,
+            authServerName = authServerName,
+            preferredTarget = state?.returnTargetServerName,
+        )
 
         return connectPlayerToTarget(
             player = player,
@@ -439,9 +471,12 @@ class BackendAuthHoldListener(
         failureReasonKey: String
     ): Boolean {
         val messages = HyperZoneLoginMain.getInstance().messageService
-        val resolvedTarget = targetServerName
-            ?.takeUnless { it.isBlank() || it.equals(authServerName, ignoreCase = true) }
-            ?: resolveVelocityInitialTargetServerName(server, player, authServerName)
+
+        val resolvedTarget = resolvePostAuthTarget(
+            player = player,
+            authServerName = authServerName,
+            preferredTarget = targetServerName,
+        )
         val hyperPlayer = getHyperPlayer(player)
 
         if (resolvedTarget == null) {
@@ -511,4 +546,3 @@ class BackendAuthHoldListener(
         }
     }
 }
-

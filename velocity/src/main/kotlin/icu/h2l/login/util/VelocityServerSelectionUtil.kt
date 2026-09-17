@@ -42,7 +42,7 @@ internal fun resolveVelocityInitialTargetServerName(
         .orElse("")
 
     val forcedOrder = config.forcedHosts[hostKey].orEmpty()
-    val connectionOrder = if (forcedOrder.isNotEmpty()) forcedOrder else config.attemptConnectionOrder
+    val connectionOrder = forcedOrder.ifEmpty { config.attemptConnectionOrder }
 
     connectionOrder.firstOrNull { candidate ->
         candidate.isNotBlank() &&
