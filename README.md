@@ -1,5 +1,19 @@
 # HyperZoneLogin
 
+> **Downstream Modifications**
+>
+> This repository is a downstream fork of [HyperZoneLogin/HyperzoneLogin](https://github.com/HyperZoneLogin/HyperzoneLogin).
+> It tracks upstream weekly and applies a small set of downstream-specific changes on top.
+>
+> **Post-auth target resolution** — For both the `outpre` and `backend` waiting-area flows, the post-auth target server is resolved with the following priority:
+>
+> 1. **Forced Host** — `forcedHosts` entry matching the player's virtual host in `velocity.toml`
+> 2. **Connection order** — the `try` list (`attemptConnectionOrder`) in `velocity.toml`
+> 3. **Remembered target** — the server the player attempted to join during authentication
+> 4. **Any non-auth server** — final fallback
+>
+> The authentication server itself is always skipped, and servers not registered in Velocity are ignored. This keeps post-auth routing consistent with the proxy's own `velocity.toml` connection order.
+
 **HyperZoneLogin** is a Velocity-based authentication framework for Minecraft proxy networks.
 It is designed for servers that need to support multiple login flows under one unified profile system.
 
@@ -74,7 +88,7 @@ For module-specific details, see the READMEs inside:
 
 If HyperZoneLogin helps your network, you can support development and maintenance here:
 
-[![Ko-fi](https://img.shields.io/badge/Ko--fi-Support%20Project-FF5E5B?logo=kofi&logoColor=white)](https://ko-fi.com/ksqeib)
+[![Ko-fi](https://img.shields.io/badge/Ko-fi-Support%20Project-FF5E5B?logo=kofi&logoColor=white)](https://ko-fi.com/ksqeib)
 [![爱发电](https://img.shields.io/badge/%E7%88%B1%E5%8F%91%E7%94%B5-%E6%94%AF%E6%8C%81%E9%A1%B9%E7%9B%AE-946CE6)](https://afdian.com/a/ksqeib445)
 
 If you do not want to sponsor, you can still help by:

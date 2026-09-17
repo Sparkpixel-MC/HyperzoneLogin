@@ -1,5 +1,19 @@
 # HyperZoneLogin
 
+> **下游仓库修改说明**
+>
+> 本仓库是 [HyperZoneLogin/HyperzoneLogin](https://github.com/HyperZoneLogin/HyperzoneLogin) 的下游分支，
+> 每周跟随上游更新，并在其上叠加少量下游特有的改动。
+>
+> **认证后目标服务器解析** —— 在 `outpre` 与 `backend` 两种等待区流程中，认证完成后的目标服务器按以下优先级解析：
+>
+> 1. **Forced Host** —— `velocity.toml` 中匹配玩家 virtual host 的 `forcedHosts` 项
+> 2. **连接顺序** —— `velocity.toml` 中的 `try` 列表（`attemptConnectionOrder`）
+> 3. **记忆目标** —— 玩家在认证期间尝试进入的服务器
+> 4. **任意非认证服** —— 最终兜底
+>
+> 认证服本身始终会被跳过，未在 Velocity 中注册的服务器也会被忽略。这样认证后的转发顺序与代理自身的 `velocity.toml` 连接顺序保持一致。
+
 **HyperZoneLogin** 是一个面向 Minecraft Velocity 代理网络的认证框架，
 用于把多种登录方式统一到同一套 Profile / 档案体系中。
 
@@ -75,5 +89,3 @@ HyperZoneLogin 适合需要统一认证入口的代理服网络，例如：
 - 完善文档
 - 提交高质量 PR
 - 将项目推荐给有需要的人
-
-
