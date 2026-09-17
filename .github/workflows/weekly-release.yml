@@ -9,11 +9,11 @@ permissions:
   contents: write
 
 jobs:
-  sync-upstream:
+  Sync-Upstream:
     name: Sync Upstream
     runs-on: ubuntu-latest
     steps:
-      - name: Checkout repository
+      - name: Checkout Repository
         uses: actions/checkout@v4
         with:
           ref: ${{ github.ref_name }}
@@ -21,7 +21,7 @@ jobs:
           submodules: recursive
           token: ${{ secrets.GITHUB_TOKEN }}
 
-      - name: Merge upstream changes
+      - name: Merge Upstream Changes
         env:
           UPSTREAM_REPO: 'https://github.com/HyperZoneLogin/HyperzoneLogin.git'
           UPSTREAM_BRANCH: 'master'
@@ -49,25 +49,26 @@ jobs:
             git commit --no-edit || true
           fi
 
-      - name: Sync and update submodules
+      - name: Sync and Update Submodules
         run: |
           set -e
           git submodule sync --recursive || true
           git submodule update --init --recursive --force
           git submodule status --recursive || true
 
-      - name: Push merged result back to downstream
+      - name: Push Merged Result Back to Downstream
         run: |
           set -e
           git push origin HEAD:${{ github.ref_name }} || echo "Push failed, continuing anyway"
-  build:
-    name: Build Plugin JARs
-    needs: sync-upstream
+
+  Build:
+    name: Build Plugin JAR
+    needs: Sync-Upstream
     runs-on: ubuntu-latest
     outputs:
-      jar_name: ${{ steps.find_jar.outputs.jar_name }}
+      Jar_Name: ${{ steps.Find_Jar.outputs.Jar_Name }}
     steps:
-      - name: Checkout repository
+      - name: Checkout Repository
         uses: actions/checkout@v4
         with:
           ref: ${{ github.ref_name }}
@@ -75,23 +76,23 @@ jobs:
           submodules: recursive
           token: ${{ secrets.GITHUB_TOKEN }}
 
-      - name: Set up JDK 25
+      - name: Set Up JDK 25
         uses: actions/setup-java@v4
         with:
           distribution: temurin
           java-version: '25'
 
-      - name: Set up Gradle
+      - name: Set Up Gradle
         uses: gradle/actions/setup-gradle@v4
 
-      - name: Make Gradle wrapper executable
+      - name: Make Gradle Wrapper Executable
         run: chmod +x ./gradlew
 
-      - name: Build plugin jars
+      - name: Build Plugin JARs
         run: ./gradlew clean build buildCtdDistributions -PreleaseChannel=WEEKLY
 
-      - name: Locate velocity jar (exclude -all)
-        id: find_jar
+      - name: Locate Velocity JAR
+        id: Find_Jar
         run: |
           set -e
           JAR=$(find velocity/build/libs -maxdepth 1 -type f -name '*.jar' \
@@ -100,104 +101,87 @@ jobs:
                   ! -name '*-javadoc.jar' \
                   | sort | head -n 1)
           if [ -z "$JAR" ]; then
-            echo "No suitable jar found in velocity/build/libs" >&2
+            echo "No suitable JAR found in velocity/build/libs" >&2
             ls -la velocity/build/libs || true
             exit 1
           fi
-          echo "jar_path=$JAR" >> "$GITHUB_OUTPUT"
-          echo "jar_name=$(basename "$JAR")" >> "$GITHUB_OUTPUT"
-          echo "Selected jar: $JAR"
+          echo "Jar_Path=$JAR" >> "$GITHUB_OUTPUT"
+          echo "Jar_Name=$(basename "$JAR")" >> "$GITHUB_OUTPUT"
+          echo "Selected JAR: $JAR"
 
-      - name: Upload velocity jar
+      - name: Upload Velocity JAR
         uses: actions/upload-artifact@v4
         with:
-          name: velocity-jar
-          path: ${{ steps.find_jar.outputs.jar_path }}
+          name: Velocity-JAR
+          path: ${{ steps.Find_Jar.outputs.Jar_Path }}
           if-no-files-found: error
 
-      - name: Upload HZL build artifacts
-        uses: actions/upload-artifact@v4
-        with:
-          name: hzl-builds
-          path: |
-            build/HZL/*
-            build/HZL-ctd/*
-          if-no-files-found: warn
-
-  release:
+  Release:
     name: Publish Release
-    needs: build
+    needs: Build
     runs-on: ubuntu-latest
     steps:
-      - name: Checkout repository
+      - name: Checkout Repository
         uses: actions/checkout@v4
         with:
           ref: ${{ github.ref_name }}
           fetch-depth: 0
           token: ${{ secrets.GITHUB_TOKEN }}
 
-      - name: Download velocity jar
+      - name: Download Velocity JAR
         uses: actions/download-artifact@v4
         with:
-          name: velocity-jar
-          path: release-assets/velocity-jar
+          name: Velocity-JAR
+          path: Release-Assets/Velocity-JAR
 
-      - name: Download HZL build artifacts
-        uses: actions/download-artifact@v4
-        with:
-          name: hzl-builds
-          path: release-assets/hzl-builds
-
-      - name: List release assets
+      - name: List Release Assets
         run: |
-          find release-assets -type f | sort
+          find Release-Assets -type f | sort
 
-      - name: Compute weekly tag
-        id: meta
+      - name: Compute Weekly Tag
+        id: Meta
         run: |
           TAG="weekly-$(date -u +%G).W$(date -u +%V)"
-          echo "tag=$TAG" >> "$GITHUB_OUTPUT"
-          echo "name=HyperZoneLogin $TAG" >> "$GITHUB_OUTPUT"
+          echo "Tag=$TAG" >> "$GITHUB_OUTPUT"
+          echo "Name=HyperZoneLogin $TAG" >> "$GITHUB_OUTPUT"
 
-      - name: Update weekly tag
+      - name: Update Weekly Tag
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git tag -f "${{ steps.meta.outputs.tag }}"
-          git push origin "refs/tags/${{ steps.meta.outputs.tag }}" --force
+          git tag -f "${{ steps.Meta.outputs.Tag }}"
+          git push origin "refs/tags/${{ steps.Meta.outputs.Tag }}" --force
 
-      - name: Publish weekly prerelease
+      - name: Publish Weekly Prerelease
         uses: ncipollo/release-action@v1
         with:
           token: ${{ secrets.GITHUB_TOKEN }}
-          tag: ${{ steps.meta.outputs.tag }}
-          name: ${{ steps.meta.outputs.name }}
+          tag: ${{ steps.Meta.outputs.Tag }}
+          name: ${{ steps.Meta.outputs.Name }}
           prerelease: true
           allowUpdates: true
           artifactErrorsFailBuild: true
           removeArtifacts: true
           artifacts: |
-            release-assets/velocity-jar/*
-            release-assets/hzl-builds/*
+            Release-Assets/Velocity-JAR/*.jar
           body: |
             ## 🚀 HyperZoneLogin Weekly Release
 
             Welcome to this week's automated build! 🎉
 
             ### 📦 Included Artifacts
-            - **Velocity Plugin JAR**: `${{ needs.build.outputs.jar_name }}` (from `velocity/build/libs/`)
-            - **Other Builds**: `build/HZL/*`, `build/HZL-ctd/*`
+            - **Velocity Plugin JAR**: `${{ needs.Build.outputs.Jar_Name }}`
 
             ### 🔄 Upstream Merge
             This release includes the latest changes from upstream.
             Any merge conflicts were resolved by keeping the downstream implementation.
 
             ### 🧩 Submodules
-            Submodules (e.g. `backend-nanolimbo/NanoLimbo`) have been synced and updated to the commits recorded by the merged main repository.
+            Submodules have been synced and updated to the commits recorded by the merged main repository.
 
             ### 🛠️ Installation
-            1. Download the desired JAR files from the assets below.
-            2. Place the Velocity plugin JAR into your Velocity `plugins/` folder.
+            1. Download the Velocity plugin JAR from the assets below.
+            2. Place it into your Velocity `plugins/` folder.
             3. Restart your proxy.
 
             ### 📝 Changelog
