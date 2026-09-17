@@ -21,11 +21,9 @@
 
 package icu.h2l.login.inject.network.netty.replacer
 
-import com.velocitypowered.api.network.ProtocolVersion
 import com.velocitypowered.api.proxy.Player
 import com.velocitypowered.api.proxy.ServerConnection
 import com.velocitypowered.api.util.GameProfile
-import com.velocitypowered.proxy.config.PlayerInfoForwarding
 import com.velocitypowered.proxy.config.VelocityConfiguration
 import com.velocitypowered.proxy.connection.MinecraftConnection
 import com.velocitypowered.proxy.connection.PlayerDataForwarding
@@ -142,11 +140,13 @@ class LoginProfilePacketReplacer(
     }
 
     private fun genServerLogin(): ServerLoginPacket {
-        return if (player.identifiedKey == null && player.protocolVersion.noLessThan(ProtocolVersion.MINECRAFT_1_19_3)) {
-            ServerLoginPacket(replacedProfile.name, replacedProfile.id)
-        } else {
-            ServerLoginPacket(replacedProfile.name, player.identifiedKey)
-        }
+        // 统一使用 (String, UUID) 构造器确保 holderUuid 非 null。
+        // 高版本协议（≥1.20.2，含 26.x / 1.21.x）encode 时会无条件 writeUuid(holderUuid)，
+        // 若使用 (String, IdentifiedKey) 构造器则 holderUuid 为 null，导致 NPE 无法进入服务器。
+        // playerKey 通过 setPlayerKey 补充设置，兼容 1.19-1.19.2 的 IdentifiedKey 序列化。
+        val packet = ServerLoginPacket(replacedProfile.name, replacedProfile.id)
+        player.identifiedKey?.let { packet.setPlayerKey(it) }
+        return packet
     }
 
     /**
@@ -179,6 +179,9 @@ class LoginProfilePacketReplacer(
                 ctx.fireExceptionCaught(t)
             } catch (_: Throwable) {
                 // ignore
+            }finally {
+//                出错了就马上跑掉
+                retire()
             }
         }
     }

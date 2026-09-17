@@ -27,6 +27,7 @@ plugins {
     alias(libs.plugins.kotlin)
     alias(libs.plugins.shadow)
     id("icu.h2l.runtime-dependencies")
+    kotlin("kapt")
 }
 
 val bstatsRelocatedClasspath = configurations.create("bstatsRelocatedClasspath") {
@@ -34,7 +35,24 @@ val bstatsRelocatedClasspath = configurations.create("bstatsRelocatedClasspath")
     isCanBeResolved = true
 }
 
+val velocityCtdBuild = providers.gradleProperty("velocityCtd")
+    .map { it.equals("true", ignoreCase = true) }
+    .orElse(false)
+    .get()
+val velocityApiDependency = if (velocityCtdBuild) libs.velocityCtdApi else libs.velocityApi
+val velocityProxyDependency = if (velocityCtdBuild) libs.velocityCtdProxy else libs.velocityProxy
+val velocityCompatibilitySourceDir = if (velocityCtdBuild) "src/ctd/kotlin" else "src/official/kotlin"
+
+kotlin {
+    sourceSets {
+        named("main") {
+            kotlin.srcDir(velocityCompatibilitySourceDir)
+        }
+    }
+}
+
 val embeddedModuleProjects = listOf(
+    project(":backend-nanolimbo"),
     project(":auth-floodgate"),
     project(":auth-offline"),
     project(":auth-yggd"),
@@ -61,6 +79,10 @@ dependencies {
     // and will register themselves with the main plugin at runtime. Do not include
     // them as project dependencies here so they are not bundled into the main plugin jar.
     implementation(project(":api"))
+    implementation(project(":cli"))
+
+    // CLI dependencies are declared in the :cli module and published through
+    // its dedicated runtime-dependencies manifest for the monolith launcher.
 //    implementation(project(":vcinjector"))
 
 // Exposed ORM / runtime-loaded libraries
@@ -72,8 +94,8 @@ dependencies {
     needPackageCompileOnly(libs.mariadb)
     needPackageCompileOnly(libs.hikari)
 //    VC
-    compileOnly(libs.velocityApi)
-    compileOnly(libs.velocityProxy) // From Elytrium Repo.
+    compileOnly(velocityApiDependency)
+    compileOnly(velocityProxyDependency) // From Elytrium Repo or VelocityCTD snapshots.
     compileOnly(libs.floodgateApi)
     add(bstatsRelocatedClasspath.name, libs.bstatsVelocity)
     compileOnly(files(relocateBstatsCompileOnlyJar.flatMap { it.archiveFile }))
@@ -93,7 +115,6 @@ dependencies {
     needPackageCompileOnly(libs.asmCommons)
 
     compileOnly(libs.nettyAll)
-    compileOnly(libs.gson)
     compileOnly(libs.log4jApi)
     compileOnly(libs.adventureTextSerializerGson)
     compileOnly(libs.adventureTextLoggerSlf4j)
@@ -103,13 +124,14 @@ dependencies {
     compileOnly(libs.guava)
     compileOnly(libs.brigadier)
 
-    annotationProcessor(libs.velocityApi)
+    annotationProcessor(velocityApiDependency)
 
     testImplementation(platform(libs.junitBom))
     testImplementation(libs.junitJupiter)
-    testImplementation(libs.velocityApi)
-    testImplementation(libs.velocityProxy) {
+    testImplementation(velocityApiDependency)
+    testImplementation(velocityProxyDependency) {
         exclude(group = "com.velocitypowered", module = "velocity-proxy-log4j2-plugin")
+        exclude(group = "com.velocityctd", module = "velocity-proxy-log4j2-plugin")
     }
     testImplementation(libs.nettyAll)
     testImplementation(libs.adventureTextLoggerSlf4j)
@@ -120,6 +142,7 @@ dependencies {
     testImplementation(libs.configurateYaml)
     testImplementation("io.mockk:mockk:1.13.17")
     testRuntimeOnly(libs.junitPlatformLauncher)
+    testImplementation(kotlin("test"))
 }
 
 tasks {
@@ -133,7 +156,11 @@ tasks {
 
     named<Jar>("jar") {
         archiveBaseName.set("HyperZoneLogin")
-        archiveClassifier.set("")
+        archiveClassifier.set(if (velocityCtdBuild) "ctd" else "")
+        // Keep the official and VelocityCTD builds in separate directories so one build
+        // never writes ctd jars into the official libs dir (or vice versa). Without this
+        // the two variants coexist in build/libs and the "wrong" variant appears as stray.
+        destinationDirectory.set(if (velocityCtdBuild) layout.buildDirectory.dir("libs-ctd") else layout.buildDirectory.dir("libs"))
         duplicatesStrategy = DuplicatesStrategy.EXCLUDE
 
         val apiProject = project(":api")
@@ -144,9 +171,11 @@ tasks {
 
     register<Jar>("monolithJar") {
         group = "build"
-        description = "Builds an all-in-one HyperZoneLogin jar with embedded optional modules."
+        description = "Builds an all-in-one HyperZoneLogin jar with embedded optional modules and CLI tool."
         archiveBaseName.set("HyperZoneLogin")
-        archiveClassifier.set("all")
+        archiveClassifier.set(if (velocityCtdBuild) "all-ctd" else "all")
+        // Same per-variant split as the "jar" task (see above).
+        destinationDirectory.set(if (velocityCtdBuild) layout.buildDirectory.dir("libs-ctd") else layout.buildDirectory.dir("libs"))
         duplicatesStrategy = DuplicatesStrategy.EXCLUDE
 
         val currentSourceSets = project.extensions.getByType(SourceSetContainer::class.java)
@@ -158,12 +187,31 @@ tasks {
         from(apiSourceSets.named("main").get().output)
 
         embeddedModuleProjects.forEach { embeddedProject ->
-            val embeddedSourceSets = embeddedProject.extensions.getByType(SourceSetContainer::class.java)
             dependsOn(embeddedProject.tasks.named("classes"))
-            from(embeddedSourceSets.named("main").get().output) {
-                exclude("velocity-plugin.json")
-                exclude("META-INF/hzl/runtime-dependencies.properties")
+            if (embeddedProject.path == ":backend-nanolimbo") {
+                val backendNanolimboJar = embeddedProject.tasks.named("jar", Jar::class)
+                dependsOn(backendNanolimboJar)
+                from(backendNanolimboJar.flatMap { it.archiveFile }.map { archive -> zipTree(archive.asFile) }) {
+                    exclude("META-INF/*.SF", "META-INF/*.DSA", "META-INF/*.RSA", "META-INF/MANIFEST.MF")
+                }
+            } else {
+                val embeddedSourceSets = embeddedProject.extensions.getByType(SourceSetContainer::class.java)
+                from(embeddedSourceSets.named("main").get().output) {
+                    exclude("velocity-plugin.json")
+                    exclude("META-INF/hzl/runtime-dependencies.properties")
+                }
             }
+        }
+
+        // Include CLI module classes only (not dependencies - they will be downloaded at runtime)
+        val cliProject = project(":cli")
+        val cliSourceSets = cliProject.extensions.getByType(SourceSetContainer::class.java)
+        dependsOn(cliProject.tasks.named("classes"))
+        from(cliSourceSets.named("main").get().output)
+
+
+        manifest {
+            attributes["Main-Class"] = "icu.h2l.login.cli.Main"
         }
     }
 
@@ -179,4 +227,7 @@ tasks {
         dependsOn(named("jar"))
         dependsOn(named("monolithJar"))
     }
+}
+repositories {
+    mavenCentral()
 }

@@ -31,7 +31,6 @@ import icu.h2l.api.profile.HyperZoneProfileService
 import icu.h2l.api.util.RemapUtils
 import icu.h2l.login.HyperZoneLoginMain
 import icu.h2l.login.database.DatabaseHelper
-import icu.h2l.login.player.VelocityHyperZonePlayer
 import java.util.*
 import java.util.concurrent.ConcurrentHashMap
 
@@ -66,10 +65,6 @@ class VelocityHyperZoneProfileService(
     override fun getAttachedProfile(player: HyperZonePlayer): Profile? {
         val profileId = attachedProfiles[player] ?: return null
         return databaseHelper.getProfile(profileId)
-    }
-
-    fun getAttachedProfileId(player: HyperZonePlayer): UUID? {
-        return attachedProfiles[player]
     }
 
     override fun canResolve(profileId: UUID): Boolean {
@@ -184,7 +179,6 @@ class VelocityHyperZoneProfileService(
         }
         attachedProfiles[player] = profile.id
         HyperZoneLoginMain.getInstance().proxy.eventManager.fire(ProfileAttachedEvent(player, profile))
-        (player as? VelocityHyperZonePlayer)?.onAttachedProfileAvailable()
         return profile
     }
 
@@ -255,12 +249,27 @@ class VelocityHyperZoneProfileService(
             }
         }
 
+        credentials.forEach { credential ->
+            credential.onConsumed(profileId)
+        }
+
         return targetProfile
     }
 
     private fun resolveRequestedUuid(userName: String, uuid: UUID?): UUID {
         val remapPrefix = HyperZoneLoginMain.getCoreConfig().remap.prefix
         return uuid ?: RemapUtils.genUUID(userName, remapPrefix)
+    }
+
+    override fun syncProfileName(profileId: UUID, authenticatedName: String): Boolean {
+        val existing = databaseHelper.getProfile(profileId) ?: return false
+        if (existing.name == authenticatedName) {
+            return true
+        }
+        debug(HyperZoneDebugType.OUTPRE_TRACE) {
+            "profileService.syncProfileName profileId=$profileId oldName=${existing.name} newName=$authenticatedName"
+        }
+        return databaseHelper.updateProfileName(profileId, authenticatedName)
     }
 }
 

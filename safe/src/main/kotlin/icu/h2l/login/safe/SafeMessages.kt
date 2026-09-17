@@ -79,6 +79,14 @@ object SafeMessages {
         return render("ip-rate-limited.strict", "你的 IP 请求过于频繁，请稍后再试（当前为高峰防护模式）")
     }
 
+    fun ipConcurrentLimitReached(max: Int): Component {
+        return render(
+            "ip-concurrent-limit",
+            "同一 IP 同时在线人数已达上限（<max>），请联系管理员或等待其他会话结束",
+            HyperZoneMessagePlaceholder.text("max", max)
+        )
+    }
+
     private fun render(
         key: String,
         fallback: String,

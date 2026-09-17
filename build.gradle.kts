@@ -20,6 +20,7 @@
  */
 
 import org.gradle.jvm.tasks.Jar
+import org.gradle.api.tasks.Exec
 import java.time.LocalDate
 import java.time.YearMonth
 import java.time.temporal.WeekFields
@@ -196,7 +197,9 @@ spotless {
             "auth-floodgate/src/**/*.kt",
             "auth-offline/src/**/*.kt",
             "auth-yggd/src/**/*.kt",
+            "cli/src/**/*.kt",
             "data-merge/src/**/*.kt",
+            "backend-nanolimbo/src/**/*.kt",
             "profile-skin/src/**/*.kt",
             "safe/src/**/*.kt",
             "vc-runtest/src/**/*.kt",
@@ -213,7 +216,9 @@ spotless {
             "auth-floodgate/build.gradle.kts",
             "auth-offline/build.gradle.kts",
             "auth-yggd/build.gradle.kts",
+            "cli/build.gradle.kts",
             "data-merge/build.gradle.kts",
+            "backend-nanolimbo/build.gradle.kts",
             "profile-skin/build.gradle.kts",
             "safe/build.gradle.kts",
             "vc-runtest/build.gradle.kts",
@@ -246,6 +251,10 @@ subprojects {
         maven("https://maven.fabricmc.net/")
         maven("https://repo.opencollab.dev/maven-snapshots")
         maven("https://maven.elytrium.net/repo/")
+        maven {
+            name = "velocityctdSnapshots"
+            url = uri("https://repo.velocityctd.com/snapshots")
+        }
     }
 
     tasks.withType(ProcessResources::class.java).configureEach {
@@ -260,13 +269,14 @@ subprojects {
         // Instead: exclude the raw template from the standard copy and inject the version
         // via a doLast action that does a direct string replacement in the output file.
         val srcTemplate = project.file("src/main/resources/velocity-plugin.json")
-        inputs.file(srcTemplate).optional(true)
-        exclude("velocity-plugin.json")
-        doLast("injectPluginVersion") {
-            if (!srcTemplate.exists()) return@doLast
-            val dst = destinationDir.resolve("velocity-plugin.json")
-            dst.parentFile.mkdirs()
-            dst.writeText(srcTemplate.readText().replace("\${pluginVersion}", pluginVersion))
+        if (srcTemplate.exists()) {
+            inputs.file(srcTemplate)
+            exclude("velocity-plugin.json")
+            doLast("injectPluginVersion") {
+                val dst = destinationDir.resolve("velocity-plugin.json")
+                dst.parentFile.mkdirs()
+                dst.writeText(srcTemplate.readText().replace("\${pluginVersion}", pluginVersion))
+            }
         }
     }
 
@@ -290,10 +300,11 @@ subprojects {
 
 val pluginBundleDir = layout.buildDirectory.dir("HZL")
 val splitPluginBundleDir = layout.buildDirectory.dir("HZL-split")
+val ctdPluginBundleDir = layout.buildDirectory.dir("HZL-ctd")
 
 val collectPluginJars = tasks.register<Sync>("collectPluginJars") {
     group = "build"
-    description = "Collects the all-in-one HyperZoneLogin jar into one distribution directory."
+    description = "Collects the all-in-one HyperZoneLogin jar (plugin + CLI tool) into one distribution directory."
     into(pluginBundleDir)
 
     val velocityProject = project(":velocity")
@@ -311,7 +322,7 @@ val collectSplitPluginJars = tasks.register<Sync>("collectSplitPluginJars") {
     from(velocityProject.tasks.named("jar", Jar::class).flatMap { it.archiveFile })
 
     subprojects
-        .filter { it.path != ":api" && it.path != ":velocity" && it.path != ":vc-runtest" }
+        .filter { it.path != ":api" && it.path != ":velocity" && it.path != ":vc-runtest" && it.path != ":cli" }
         .forEach { subproject ->
             val archiveTaskName = "jar"
             dependsOn(subproject.tasks.named(archiveTaskName))
@@ -321,6 +332,51 @@ val collectSplitPluginJars = tasks.register<Sync>("collectSplitPluginJars") {
                 }
             }
         }
+}
+
+val buildVelocityCtd = tasks.register<Exec>("buildVelocityCtd") {
+    group = "build"
+    description = "Builds VelocityCTD-flavored HyperZoneLogin jars using com.velocityctd Velocity dependencies."
+    workingDir = rootDir
+
+    // VelocityCTD is built as a separate Gradle invocation, NOT a nested in-process build.
+    // A nested GradleBuild runs inside the same daemon/JVM as the outer build, and the Kotlin
+    // incremental compiler keeps a process-wide registry (FilePageCache) of its .tab cache
+    // files keyed by absolute path. The outer build runs :api:compileKotlin against the
+    // official Velocity API; the CTD build would run it again against VelocityCTD in that same
+    // JVM, so the second compile re-opens the same cacheable/caches-jvm/**/*.tab files that the
+    // first one already registered, failing with "Storage for [...] is already registered".
+    // Launching `gradlew --no-daemon` here gives the CTD build its own JVM with its own
+    // FilePageCache, so the two compile tasks never share that registry. We pass through
+    // -PreleaseChannel/etc. from the driving build so version computation stays consistent.
+    val projectProperties = gradle.startParameter.projectProperties
+        .filterKeys { it !in setOf("velocityCtd") }
+        .map { (key, value) -> "-P$key=$value" }
+
+    doFirst {
+        val onWindows = System.getProperty("os.name").lowercase().contains("windows")
+        val wrapper = rootDir.resolve(if (onWindows) "gradlew.bat" else "gradlew").absolutePath
+        val base = if (onWindows) listOf("cmd", "/c", wrapper) else listOf(wrapper)
+        commandLine(
+            *(base + listOf("--no-daemon") + projectProperties + listOf(
+                ":velocity:jar",
+                ":velocity:monolithJar",
+                "-PvelocityCtd=true",
+            )).toTypedArray(),
+        )
+    }
+}
+
+val collectCtdPluginJars = tasks.register<Sync>("collectCtdPluginJars") {
+    group = "build"
+    description = "Collects VelocityCTD-flavored HyperZoneLogin jars into one distribution directory."
+    into(ctdPluginBundleDir)
+    dependsOn(buildVelocityCtd)
+
+    val velocityProject = project(":velocity")
+    // CTD jars now live in libs-ctd/ so they never mix with the official libs/ output.
+    from(velocityProject.layout.buildDirectory.file("libs-ctd/HyperZoneLogin-${version}-ctd.jar"))
+    from(velocityProject.layout.buildDirectory.file("libs-ctd/HyperZoneLogin-${version}-all-ctd.jar"))
 }
 
 val buildMonolith = tasks.register("buildMonolith") {
@@ -334,6 +390,12 @@ val buildAllDistributions = tasks.register("buildAllDistributions") {
     description = "Builds both the all-in-one and split HyperZoneLogin distributions."
     dependsOn(collectPluginJars)
     dependsOn(collectSplitPluginJars)
+}
+
+val buildCtdDistributions = tasks.register("buildCtdDistributions") {
+    group = "build"
+    description = "Builds the VelocityCTD-flavored HyperZoneLogin distribution."
+    dependsOn(collectCtdPluginJars)
 }
 
 val printVersionInfo = tasks.register("printVersionInfo") {
@@ -361,3 +423,4 @@ tasks.named("check") {
 tasks.named("build") {
     dependsOn(collectPluginJars)
 }
+

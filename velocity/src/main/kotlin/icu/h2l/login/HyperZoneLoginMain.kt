@@ -31,6 +31,7 @@ import icu.h2l.api.command.HyperChatCommandRegistration
 import icu.h2l.api.message.HyperZoneMessageServiceProvider
 import icu.h2l.api.module.HyperSubModule
 import icu.h2l.api.player.HyperZonePlayerAccessor
+import icu.h2l.api.profile.HyperZoneCredentialFlowProvider
 import icu.h2l.api.profile.CredentialChannelRegistryProvider
 import icu.h2l.api.profile.HyperZoneProfileServiceProvider
 import icu.h2l.api.util.ConfigCommentTranslatorProvider
@@ -51,6 +52,7 @@ import icu.h2l.login.inject.network.VelocityNetworkModule
 import icu.h2l.login.listener.*
 import icu.h2l.login.manager.HyperChatCommandManagerImpl
 import icu.h2l.login.manager.HyperZonePlayerManager
+import icu.h2l.login.manager.LoginManager
 import icu.h2l.login.message.MessageKeys
 import icu.h2l.login.message.MessageService
 import icu.h2l.login.module.EmbeddedModuleRegistry
@@ -69,7 +71,6 @@ import icu.h2l.login.vServer.command.ExitVServerCommand
 import icu.h2l.login.vServer.command.OverVServerCommand
 import icu.h2l.login.vServer.outpre.OutPreVServerAuth
 import net.kyori.adventure.text.logger.slf4j.ComponentLogger
-import org.spongepowered.configurate.ConfigurationNode
 import java.nio.file.Files
 import java.nio.file.Path
 
@@ -95,6 +96,7 @@ class HyperZoneLoginMain(
     lateinit var credentialChannelRegistry: CredentialChannelRegistryImpl
     lateinit var bindingCodeService: ProfileBindingCodeService
     lateinit var messageService: MessageService
+    lateinit var loginManager: LoginManager
     val serverAdapter: HyperZoneVServerAdapter?
         get() = activeVServerAdapter
     val hyperZonePlayers: HyperZonePlayerAccessor
@@ -110,9 +112,6 @@ class HyperZoneLoginMain(
 
         @JvmStatic
         fun getCoreConfig(): CoreConfig = coreConfig
-
-        @JvmStatic
-        fun getStartConfig(): StartConfig = startConfig
 
         @JvmStatic
         fun getInstance(): HyperZoneLoginMain = instance
@@ -149,12 +148,15 @@ class HyperZoneLoginMain(
         // 创建基础表（Profile 表等）
         createBaseTables()
         profileService = VelocityHyperZoneProfileService(databaseHelper)
+        HyperZoneProfileServiceProvider.bind(profileService)
+        loginManager = LoginManager(server, profileService)
+        HyperZoneCredentialFlowProvider.bind(loginManager)
         backendRuntimeProfileCompensator = BackendRuntimeProfileCompensator(profileService, logger)
         bindingCodeService = ProfileBindingCodeService(
             BindingCodeRepository(databaseManager, databaseManager.getBindingCodeTable()),
-            profileService
+            profileService,
+            loginManager,
         )
-        HyperZoneProfileServiceProvider.bind(profileService)
         CredentialChannelRegistryProvider.bind(credentialChannelRegistry)
 
         activeVServerAdapter = null
@@ -228,8 +230,6 @@ class HyperZoneLoginMain(
         proxy.eventManager.register(plugin, AttachedProfileInitialGameProfileListener())
         proxy.eventManager.register(plugin, LoginProfileReplaceDefaultListener())
         proxy.eventManager.register(plugin, backendRuntimeProfileCompensator)
-        proxy.eventManager.register(plugin, LoginRenameListener())
-        proxy.eventManager.register(plugin, LoginReUuidListener())
         proxy.eventManager.register(plugin, LoginVerifyListener())
         proxy.eventManager.register(plugin, PlayerAreaLifecycleListener)
         proxy.eventManager.register(plugin, HyperZonePlayerManager)
@@ -260,12 +260,34 @@ class HyperZoneLoginMain(
     }
 
     private fun registerConfiguredEmbeddedModules() {
+        registerBackendNanolimboEmbeddedModule()
         registerEmbeddedModule(EmbeddedModuleRegistry.authFloodgate, coreConfig.modules.authFloodgate)
         registerEmbeddedModule(EmbeddedModuleRegistry.authOffline, coreConfig.modules.authOffline)
         registerEmbeddedModule(EmbeddedModuleRegistry.authYggd, coreConfig.modules.authYggd)
         registerEmbeddedModule(EmbeddedModuleRegistry.safe, coreConfig.modules.safe)
         registerEmbeddedModule(EmbeddedModuleRegistry.profileSkin, coreConfig.modules.profileSkin)
         registerEmbeddedModule(EmbeddedModuleRegistry.dataMerge, coreConfig.modules.dataMerge)
+    }
+
+    private fun registerBackendNanolimboEmbeddedModule() {
+        val spec = EmbeddedModuleRegistry.backendNanolimbo
+        if (!coreConfig.modules.backendNanolimbo) {
+            registerEmbeddedModule(spec, false)
+            return
+        }
+
+        val configuredMode = normalizeVServerMode(coreConfig.vServer.mode)
+        if (configuredMode != "outpre") {
+            logger.info("内置模块已禁用: ${spec.displayName} (vServer.mode=$configuredMode，仅 outpre 模式启用)")
+            return
+        }
+
+        if (coreConfig.vServer.outpre.resolveOutpreAuthAddress() == null) {
+            logger.info("内置模块已禁用: ${spec.displayName} (vserver outpre authHost/authPort 无效)")
+            return
+        }
+
+        registerEmbeddedModule(spec, true)
     }
 
     private fun registerEmbeddedModule(spec: EmbeddedModuleSpec, enabled: Boolean) {
@@ -303,6 +325,7 @@ class HyperZoneLoginMain(
 
         registerModule(embeddedModule, plugin)
     }
+
 
     /**
      * Trigger re-join authentication flow in the active waiting-area implementation.
@@ -359,24 +382,6 @@ class HyperZoneLoginMain(
 
 
     
-
-
-
-
-
-
-
-
-
-
-
-
-    private fun ConfigurationNode.getBooleanOrNull(): Boolean? {
-        return if (virtual()) null else boolean
-    }
-
-
-
 
 
 

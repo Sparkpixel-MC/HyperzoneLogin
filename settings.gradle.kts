@@ -30,7 +30,15 @@ pluginManagement {
         gradlePluginPortal()
         mavenCentral()
     }
+    plugins {
+        kotlin("kapt") version "2.4.0"
+        kotlin("plugin.lombok") version "2.4.0"
+    }
 }
+plugins {
+    id("org.gradle.toolchains.foojay-resolver-convention") version "1.0.0"
+}
+
 
 rootProject.name = "HyperzoneLogin"
 
@@ -43,3 +51,5 @@ include("auth-offline")
 include("safe")
 include("data-merge")
 include("profile-skin")
+include("cli")
+include("backend-nanolimbo")

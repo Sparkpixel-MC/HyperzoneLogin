@@ -28,6 +28,9 @@ dependencies {
     compileOnly(libs.velocityApi)
     compileOnly(libs.configurateHocon)
     compileOnly(libs.configurateExtraKotlin)
+    // Netty Channel type is surfaced by the api/event signatures (OpenPreLoginEvent.channel);
+    // needed at compile time for the same-IP concurrent-session reservation key.
+    compileOnly(libs.nettyAll)
 
     testImplementation(platform(libs.junitBom))
     testImplementation(libs.junitJupiter)

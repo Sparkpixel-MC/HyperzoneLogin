@@ -1,0 +1,3 @@
+[submodule "NanoLimbo"]
+	path = backend-nanolimbo/NanoLimbo
+	url = https://github.com/HyperZoneLogin/NanoLimbo.git

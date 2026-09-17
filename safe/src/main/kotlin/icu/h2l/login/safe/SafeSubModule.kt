@@ -30,6 +30,7 @@ import icu.h2l.login.safe.listener.AuthFailureGuardListener
 import icu.h2l.login.safe.listener.PreLoginGuardListener
 import icu.h2l.login.safe.service.ConnectionRateLimiter
 import icu.h2l.login.safe.service.IpCooldownManager
+import icu.h2l.login.safe.service.IpConcurrentOnlineGuard
 import icu.h2l.login.safe.service.StrictModeController
 import icu.h2l.login.safe.service.UsernameValidator
 
@@ -70,7 +71,11 @@ class SafeSubModule : HyperSubModule {
                 recoverAfterSeconds = config.strictMode.recoverAfterSeconds,
                 logger = logger
             ),
-            usernameValidator = UsernameValidator(config.username)
+            usernameValidator = UsernameValidator(config.username),
+            ipConcurrentGuard = IpConcurrentOnlineGuard(
+                enabled = config.ipLimit.enable,
+                maxConcurrent = config.ipLimit.max
+            )
         )
         api.proxy.eventManager.register(api, listener)
         api.proxy.eventManager.register(api, AuthFailureGuardListener(authFailureCooldownManager, logger))

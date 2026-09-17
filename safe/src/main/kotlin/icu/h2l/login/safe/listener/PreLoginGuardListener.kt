@@ -22,11 +22,14 @@
 package icu.h2l.login.safe.listener
 
 import com.velocitypowered.api.event.Subscribe
+import com.velocitypowered.api.event.connection.DisconnectEvent
 import icu.h2l.api.event.connection.OpenPreLoginEvent
+import icu.h2l.api.player.getChannel
 import icu.h2l.login.safe.SafeMessages
 import icu.h2l.login.safe.config.SafeConfig
 import icu.h2l.login.safe.service.ConnectionRateLimiter
 import icu.h2l.login.safe.service.IpCooldownManager
+import icu.h2l.login.safe.service.IpConcurrentOnlineGuard
 import icu.h2l.login.safe.service.StrictModeController
 import icu.h2l.login.safe.service.UsernameValidator
 
@@ -39,7 +42,8 @@ class PreLoginGuardListener(
     private val ipCooldownManager: IpCooldownManager,
     private val authFailureCooldownManager: IpCooldownManager,
     private val strictModeController: StrictModeController,
-    private val usernameValidator: UsernameValidator
+    private val usernameValidator: UsernameValidator,
+    private val ipConcurrentGuard: IpConcurrentOnlineGuard
 ) {
     @Subscribe(priority = Short.MAX_VALUE)
     fun onOpenPreLogin(event: OpenPreLoginEvent) {
@@ -80,7 +84,20 @@ class PreLoginGuardListener(
             }
 
             deny(event, if (strictMode.active) SafeMessages.ipRateLimitedStrict() else SafeMessages.ipRateLimited(null))
+            return
         }
+
+        // 同 IP 同时在线限额：在所有前置检查通过后才占用一个并发槽位。
+        // 槽位随连接断开（DisconnectEvent）释放，因此这里若拒绝则不会有残留计数。
+        if (!ipConcurrentGuard.tryReserve(event.playerIp, event.channel.id().asShortText())) {
+            deny(event, SafeMessages.ipConcurrentLimitReached(config.ipLimit.max))
+        }
+    }
+
+    @Subscribe
+    fun onDisconnect(event: DisconnectEvent) {
+        // 释放该连接在 ipConcurrentGuard 中占用的并发槽位。
+        runCatching { ipConcurrentGuard.release(event.player.getChannel().id().asShortText()) }
     }
 
     private fun deny(event: OpenPreLoginEvent, message: net.kyori.adventure.text.Component) {

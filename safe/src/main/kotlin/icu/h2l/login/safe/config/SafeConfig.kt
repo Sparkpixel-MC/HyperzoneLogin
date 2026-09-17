@@ -37,6 +37,11 @@ class SafeConfig {
     @JvmField
     val ipRateLimit = RateLimitConfig(maxAttempts = 8, windowSeconds = 10)
 
+    // 同 IP 同时在线会话限额（对抗 bot：同一出口 IP 同时在线数上限）
+    @Comment("config.safe.ip-limit")
+    @JvmField
+    val ipLimit = IpLimitConfig()
+
     // 同 IP 超阈值后的临时冷却
     @Comment("config.safe.ip-cooldown")
     @JvmField
@@ -66,6 +71,17 @@ class SafeConfig {
         @param:Comment("config.safe.rate-limit.window-seconds")
         val windowSeconds: Int = 10
     )
+
+    @ConfigSerializable
+    class IpLimitConfig {
+        // 同 IP 同时在线限制开关
+        @Comment("config.safe.ip-limit.enable")
+        val enable = true
+
+        // 同一 IP 同时允许的在线会话数上限；0 表示不限
+        @Comment("config.safe.ip-limit.max")
+        val max = 3
+    }
 
     @ConfigSerializable
     class UsernameConfig {
